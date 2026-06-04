@@ -1,2 +1,95 @@
 @import "tailwindcss";
 
+/* CSS PURO - Sem Tailwind para evitar erros de compilação */
+/* Isso garante que o visual "Wall" funcione sem travar o Vite */
+
+.leaflet-draw-tooltip {
+    background-color: rgba(30, 58, 138, 0.9) !important; /* blue-900 */
+    color: white !important;
+    border-radius: 12px !important; /* Seu padrão rounded-wall */
+    border: none !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+    padding: 8px 16px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    backdrop-filter: blur(4px) !important;
+    margin-left: 20px !important;
+}
+
+.leaflet-draw-tooltip-subtext {
+    color: #bfdbfe !important; /* blue-200 */
+    display: block;
+    margin-top: 4px;
+    font-weight: normal;
+}
+
+.leaflet-draw-guide-dash {
+    opacity: 0.3 !important;
+}
+
+/* Remove definitivamente a sobreposição de botões */
+.leaflet-draw-section, 
+.leaflet-draw-toolbar {
+    display: none !important;
+}
+
+/* Força o contêiner do mapa a aparecer */
+#map, .leaflet-container {
+    height: 100% !important;
+    width: 100% !important;
+    min-height: 400px; /* Garante um tamanho mínimo caso o flexbox falhe */
+    background-color: #f8fafc; /* Uma cor de fundo leve para saber que o container está lá */
+}
+
+/* Garante que o corpo da página não tenha scroll indesejado */
+html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Centraliza os ícones da Toolbar */
+.absolute.top-6.right-6 button {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Estilo do Campo de Medição Fixo no Mapa */
+.measure-label {
+    background-color: #1e3a8a !important; /* blue-900 */
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important; /*rounded-wall */
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+    font-weight: bold !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4) !important;
+    white-space: nowrap !important;
+}
+
+/* Remove a setinha padrão do balão */
+.measure-label::before {
+    display: none !important;
+}
+
+/* Garante que os pontos de medição sejam grandes o suficiente para clicar */
+.leaflet-editing-icon {
+    background: white !important;
+    border: 2px solid #2563eb !important;
+    border-radius: 50% !important;
+    width: 12px !important;
+    height: 12px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
