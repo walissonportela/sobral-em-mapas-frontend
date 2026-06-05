@@ -30,15 +30,17 @@ function App() {
     <div className="h-screen w-screen overflow-hidden bg-gray-100">
       <Header />
 
-      <div className="relative h-[calc(100vh-64px)]">
-        <Sidebar
-          activeLayers={activeLayers}
-          onToggleLayer={handleLayerToggle}
-          onClearMap={handleClearLayers}
-        />
+      <main className="pt-[72px] h-full">
+        <div className="relative h-full">
+          <Sidebar
+            activeLayers={activeLayers}
+            onToggleLayer={handleLayerToggle}
+            onClearMap={handleClearLayers}
+          />
 
-        <Map activeLayers={activeLayers} />
-      </div>
+          <Map activeLayers={activeLayers} />
+        </div>
+      </main>
     </div>
   );
 }
