@@ -26,6 +26,13 @@ function App() {
     setActiveLayers([]);
   };
 
+  const [searchLocation, setSearchLocation] =
+  useState(null);
+
+  const handleSearchLocation = (location) => {
+    setSearchLocation(location);
+  };
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-gray-100">
       <Header />
@@ -36,9 +43,13 @@ function App() {
             activeLayers={activeLayers}
             onToggleLayer={handleLayerToggle}
             onClearMap={handleClearLayers}
+            onSearchLocation={handleSearchLocation}
           />
 
-          <Map activeLayers={activeLayers} />
+          <Map
+            activeLayers={activeLayers}
+            searchLocation={searchLocation}
+          />
         </div>
       </main>
     </div>

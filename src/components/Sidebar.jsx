@@ -19,20 +19,34 @@ import {
   Landmark,
   FolderTree,
   MapPinned,
+  BarChart3,
+  Printer,
+  Settings,
+  Maximize,
+  Minimize,
+  Eraser,
+  Info,
+  Bookmark,
+  Maximize2,
 } from "lucide-react";
 
 import api from "../services/api";
+
+import SearchPanel from "./SearchPanel";
 
 export default function Sidebar({
   activeLayers,
   onToggleLayer,
   onClearMap,
+  onSearchLocation
 }) {
   const [isOpen, setIsOpen] = useState(true);
   const [layers, setLayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState({});
+  const [activePanel, setActivePanel] =
+  useState("layers");
 
   useEffect(() => {
     loadLayers();
@@ -180,14 +194,157 @@ export default function Sidebar({
     );
   };
 
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (err) {
+      console.error("Erro ao alternar tela cheia:", err);
+    }
+  };
+
+  function SidebarButton({
+  icon,
+  tooltip,
+  active,
+  onClick,
+}) {
+  return (
+    <div className="group relative">
+      <button
+        onClick={onClick}
+        className={`
+          h-12
+          w-12
+          rounded-xl
+          flex
+          items-center
+          justify-center
+          transition-all
+          duration-200
+          ${
+            active
+              ? "bg-white text-blue-700 shadow-md"
+              : "text-white hover:bg-white/15"
+          }
+        `}
+      >
+        {icon}
+      </button>
+
+      <div
+        className="
+          absolute
+          left-16
+          top-1/2
+          -translate-y-1/2
+
+          opacity-0
+          translate-x-2
+
+          group-hover:opacity-100
+          group-hover:translate-x-0
+
+          transition-all
+          duration-200
+
+          pointer-events-none
+          whitespace-nowrap
+
+          px-3
+          py-2
+
+          rounded-lg
+          bg-slate-900
+          text-white
+          text-xs
+          font-medium
+
+          shadow-xl
+          z-[9999]
+        "
+      >
+        {tooltip}
+      </div>
+    </div>
+  );
+}
+
   return (
     <div
-      className={`fixed top-16 left-0 bottom-0 z-[1000] flex transition-all duration-300 ${
+      className={`fixed top-[72px] left-0 bottom-0 z-[1000] flex transition-all duration-300 ${
         isOpen
           ? "translate-x-0"
-          : "-translate-x-[360px]"
+          : "-translate-x-[420px]"
       }`}
     >
+
+    <div
+      className="
+        w-16
+        bg-gradient-to-b
+        from-blue-700
+        via-blue-800
+        to-blue-900
+        shadow-2xl
+        flex
+        flex-col
+        items-center
+        py-3
+        gap-2
+      "
+    >
+      <SidebarButton
+        tooltip="Camadas"
+        active={activePanel === "layers"}
+        onClick={() => setActivePanel("layers")}
+        icon={<Layers size={20} />}
+      />
+
+      <SidebarButton
+        tooltip="Buscar Local"
+        active={activePanel === "search"}
+        onClick={() => setActivePanel("search")}
+        icon={<Search size={20} />}
+      />
+
+      <SidebarButton
+        tooltip="Marcadores"
+        active={activePanel === "bookmarks"}
+        onClick={() => setActivePanel("bookmarks")}
+        icon={<Bookmark size={20} />}
+      />
+
+      {/* AÇÃO DIRETA */}
+      <SidebarButton
+        tooltip="Limpar Mapa"
+        active={false}
+        onClick={onClearMap}
+        icon={<Eraser size={20} />}
+      />
+
+      {/* FUTURO */}
+      <SidebarButton
+        tooltip="Imprimir"
+        active={false}
+        onClick={() => {
+          console.log("Imprimir futuramente");
+        }}
+        icon={<Printer size={20} />}
+      />
+
+      {/* AÇÃO DIRETA */}
+      <SidebarButton
+        tooltip="Tela Cheia"
+        active={false}
+        onClick={toggleFullscreen}
+        icon={<Maximize size={20} />}
+      />
+    </div>
+
       <aside
         className="
           w-[360px]
@@ -199,28 +356,80 @@ export default function Sidebar({
           flex-col
         "
       >
+
+        {/* ===========================
+            PAINEL CAMADAS
+        =========================== */}
+        {activePanel === "layers" && (
+          <>
+        
         {/* HEADER */}
-        <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
-              <MapIcon size={20} />
+        <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5 border-b border-white/10">
+
+          <div className="flex items-center justify-between mb-4">
+
+            <div className="flex items-center gap-3">
+              <div
+                className="
+                  h-12
+                  w-12
+                  rounded-2xl
+                  bg-white/15
+                  backdrop-blur-sm
+                  flex
+                  items-center
+                  justify-center
+                  shadow-lg
+                  border
+                  border-white/10
+                "
+              >
+                <Layers size={22} />
+              </div>
+
+              <div>
+                <h2 className="font-bold text-xl leading-none">
+                  Camadas
+                </h2>
+
+                <p className="text-xs text-blue-200 mt-1">
+                  Gerenciamento de mapas temáticos
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h2 className="font-bold text-lg">
-                Sobral em Mapas
-              </h2>
-
-              <p className="text-xs text-blue-200">
-                Sistema de Informações Geográficas
+            <div
+              className="
+                px-2
+                py-1
+                rounded-full
+                bg-white/10
+                text-[12px]             
+                font-bold
+                text-blue-100
+                border
+                border-white/10
+              "
+            >
+              <p className="flex items-center text-center gap-1">
+                  {layers.length} mapas
               </p>
             </div>
+
           </div>
 
+          {/* BUSCA */}
           <div className="relative">
+
             <Search
               size={18}
-              className="absolute left-3 top-3 text-blue-300"
+              className="
+                absolute
+                left-3
+                top-1/2
+                -translate-y-1/2
+                text-blue-300
+              "
             />
 
             <input
@@ -231,19 +440,25 @@ export default function Sidebar({
               placeholder="Pesquisar camadas..."
               className="
                 w-full
-                rounded-xl
+                rounded-2xl
                 bg-white/10
                 border
                 border-white/10
                 pl-10
-                pr-3
+                pr-4
                 py-3
                 text-sm
-                outline-none
+                text-white
                 placeholder:text-blue-200
+                outline-none
+                focus:border-blue-300
+                focus:bg-white/15
+                transition-all
               "
             />
+
           </div>
+
         </div>
 
         {/* LISTA DE MAPAS */}
@@ -416,7 +631,7 @@ export default function Sidebar({
                 </button>
               </div>
 
-              <div className="max-h-25 overflow-y-auto space-y-2 pr-1">
+              <div className="max-h-[180px] overflow-y-auto space-y-2 pr-1">
                 {activeLayers.map((layer) => (
                   <div
                     key={layer.id}
@@ -466,6 +681,124 @@ export default function Sidebar({
             </div>
           </div>
         )}
+
+        {/* FECHA O PAINEL LAYERS */}
+        </>
+        )}
+
+        {/* ===========================
+            PAINEL PESQUISA
+            =========================== */}
+            {activePanel === "search" && (
+              <>
+                <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
+                      <Search size={20} />
+                    </div>
+
+                    <div>
+                      <h2 className="font-bold text-lg">
+                        Buscar Local
+                      </h2>
+
+                      <p className="text-xs text-blue-200">
+                        Pesquise endereços, bairros ou coordenadas
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <SearchPanel onSearch={onSearchLocation} />
+              </>
+            )}
+
+        {/* ===========================
+            PAINEL INDICADORES
+        =========================== */}
+        {activePanel === "dashboard" && (
+          <>
+            <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
+                  <BarChart3 size={20} />
+                </div>
+
+                <div>
+                  <h2 className="font-bold text-lg">
+                    Indicadores
+                  </h2>
+
+                  <p className="text-xs text-blue-200">
+                    Dashboards e estatísticas
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 p-6">
+              <div className="border-2 border-dashed border-gray-200 rounded-2xl h-full flex flex-col items-center justify-center text-center">
+                <BarChart3
+                  size={42}
+                  className="text-gray-300 mb-3"
+                />
+
+                <h3 className="font-semibold text-gray-700">
+                  Painéis Analíticos
+                </h3>
+
+                <p className="text-sm text-gray-500 mt-2 max-w-xs">
+                  Espaço reservado para gráficos,
+                  indicadores e relatórios.
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ===========================
+                PAINEL CONSULTA
+            =========================== */}
+            {activePanel === "query" && (
+              <>
+                <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
+                      <MapPinned size={20} />
+                    </div>
+
+                    <div>
+                      <h2 className="font-bold text-lg">
+                        Consulta Espacial
+                      </h2>
+
+                      <p className="text-xs text-blue-200">
+                        Informações geográficas
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 p-6">
+                  <div className="border-2 border-dashed border-gray-200 rounded-2xl h-full flex flex-col items-center justify-center text-center">
+                    <MapPinned
+                      size={42}
+                      className="text-gray-300 mb-3"
+                    />
+
+                    <h3 className="font-semibold text-gray-700">
+                      Consulta de Feições
+                    </h3>
+
+                    <p className="text-sm text-gray-500 mt-2 max-w-xs">
+                      Espaço reservado para identificação,
+                      consultas espaciais e seleção.
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+
       </aside>
 
       <button

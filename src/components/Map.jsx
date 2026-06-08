@@ -20,6 +20,7 @@ import MapToolbar from "./MapToolBar";
 
 export default function Map({
   activeLayers = [],
+  searchLocation,
 }) {
   const [map, setMap] = useState(null);
   const [sobralGeoJson, setSobralGeoJson] =
@@ -42,6 +43,24 @@ export default function Map({
       )
       .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (
+      map &&
+      searchLocation
+    ) {
+      map.flyTo(
+        [
+          searchLocation.lat,
+          searchLocation.lon,
+        ],
+        17,
+        {
+          duration: 2,
+        }
+      );
+    }
+  }, [searchLocation, map]);
 
   const onCreated = (e) => {
     const { layerType, layer } = e;
