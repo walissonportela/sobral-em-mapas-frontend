@@ -2,6 +2,7 @@ import { useState } from "react";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import Map from "./components/Map";
+import Chatbot from "./components/Chatbot";
 
 function App() {
   const [activeLayers, setActiveLayers] = useState([]);
@@ -50,6 +51,8 @@ function App() {
             activeLayers={activeLayers}
             searchLocation={searchLocation}
           />
+
+        <Chatbot />
         </div>
       </main>
     </div>
