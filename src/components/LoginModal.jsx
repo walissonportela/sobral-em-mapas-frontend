@@ -53,7 +53,7 @@ const LoginModal = ({
 
         onClose();
       }
-    } catch (err) {
+    } catch (error) {
       setError(
         "Falha no login. Verifique suas credenciais."
       );

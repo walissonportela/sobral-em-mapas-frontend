@@ -10,12 +10,15 @@ import {
 } from "lucide-react";
 
 import LoginModal from "./LoginModal";
+import ContactModal from "./ContactModal";
 
 export default function Header({
   onLoginSuccess,
 }) {
   const [isLoginModalOpen, setIsLoginModalOpen] =
     useState(false);
+  const [isContactOpen, setIsContactOpen] =
+  useState(false);
 
   return (
     <>
@@ -107,6 +110,7 @@ export default function Header({
           </button>
 
           <button
+            onClick={() => setIsContactOpen(true)}
             className="
               hidden
               lg:flex
@@ -176,6 +180,11 @@ export default function Header({
           setIsLoginModalOpen(false)
         }
         onLoginSuccess={onLoginSuccess}
+      />
+
+      <ContactModal
+        isOpen={isContactOpen}
+        onClose={() => setIsContactOpen(false)}
       />
     </>
   );
