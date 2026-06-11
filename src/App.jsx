@@ -16,22 +16,37 @@ import Requests from "./pages/admin/Requests";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 function App() {
-  const adminRoles = ["Administrador", "Agente"];
+  const adminAndAgentRoles = [
+    "Administrador",
+    "Agente",
+  ];
+
+  const onlyAdminRoles = [
+    "Administrador",
+  ];
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<MapView />} />
+        <Route
+          path="/"
+          element={<MapView />}
+        />
 
         <Route
           path="/admin"
-          element={<Navigate to="/admin/dashboard" replace />}
+          element={
+            <Navigate
+              to="/admin/dashboard"
+              replace
+            />
+          }
         />
 
         <Route
           path="/admin/dashboard"
           element={
-            <ProtectedRoute roles={adminRoles}>
+            <ProtectedRoute roles={adminAndAgentRoles}>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -40,7 +55,7 @@ function App() {
         <Route
           path="/admin/users"
           element={
-            <ProtectedRoute roles={adminRoles}>
+            <ProtectedRoute roles={onlyAdminRoles}>
               <Users />
             </ProtectedRoute>
           }
@@ -49,7 +64,7 @@ function App() {
         <Route
           path="/admin/layers"
           element={
-            <ProtectedRoute roles={adminRoles}>
+            <ProtectedRoute roles={adminAndAgentRoles}>
               <Layers />
             </ProtectedRoute>
           }
@@ -58,7 +73,7 @@ function App() {
         <Route
           path="/admin/categories"
           element={
-            <ProtectedRoute roles={adminRoles}>
+            <ProtectedRoute roles={adminAndAgentRoles}>
               <Categories />
             </ProtectedRoute>
           }
@@ -67,7 +82,7 @@ function App() {
         <Route
           path="/admin/requests"
           element={
-            <ProtectedRoute roles={adminRoles}>
+            <ProtectedRoute roles={adminAndAgentRoles}>
               <Requests />
             </ProtectedRoute>
           }
