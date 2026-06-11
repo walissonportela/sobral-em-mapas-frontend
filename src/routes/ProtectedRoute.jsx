@@ -3,19 +3,31 @@ import { useAuth } from "../context/AuthContext";
 
 export default function ProtectedRoute({
   children,
-  roles = []
+  roles = [],
 }) {
   const { user } = useAuth();
 
   if (!user) {
-    return <Navigate to="/" replace />;
+    return (
+      <Navigate
+        to="/"
+        replace
+      />
+    );
   }
+
+  const userRole = user?.profile?.nome;
 
   if (
     roles.length > 0 &&
-    !roles.includes(user.profile?.nome)
+    !roles.includes(userRole)
   ) {
-    return <Navigate to="/" replace />;
+    return (
+      <Navigate
+        to="/"
+        replace
+      />
+    );
   }
 
   return children;
