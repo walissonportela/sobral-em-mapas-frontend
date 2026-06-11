@@ -1,24 +1,68 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom"; // Importante para o botão de administração
 import {
   User,
   Info,
   Mail,
   BookOpen,
-  Bell,
+  Bell, // Mantive caso você vá usar depois
   Settings,
   Map as MapIcon,
+  LogOut,
+  ChevronDown
 } from "lucide-react";
 
-import LoginModal from "./LoginModal";
+import LoginModal from "./auth/LoginModal";
 import ContactModal from "./ContactModal";
 
-export default function Header({
-  onLoginSuccess,
-}) {
-  const [isLoginModalOpen, setIsLoginModalOpen] =
-    useState(false);
-  const [isContactOpen, setIsContactOpen] =
-  useState(false);
+import { useAuth } from "../context/AuthContext";
+
+export default function Header() {
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isContactOpen, setIsContactOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const dropdownRef = useRef(null);
+
+  const { user, logout } = useAuth();
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target)
+      ) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
+    };
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    setIsDropdownOpen(false);
+  };
+  const role = user?.profile?.nome;
+
+  const isAdmin = [
+    "Administrador",
+    "Agente"
+  ].includes(role);
+
+  const getInitial = (name) => {
+    return name ? name.charAt(0).toUpperCase() : "U";
+  };
 
   return (
     <>
@@ -148,38 +192,115 @@ export default function Header({
 
           <div className="hidden xl:block h-8 w-px bg-white/20 mx-1" />
 
-          <button
-            onClick={() =>
-              setIsLoginModalOpen(true)
-            }
-            className="
-              flex
-              items-center
-              gap-2
-              px-5
-              py-2.5
-              rounded-2xl
-              bg-amber-400
-              text-blue-900
-              font-semibold
-              shadow-md
-              hover:bg-amber-300
-              hover:scale-105
-              transition-all
-            "
-          >
-            <User size={16} />
-            Login
-          </button>
+          {/* === BOTÃO DE ADMINISTRAÇÃO (APENAS PARA ADMINS) === */}
+          {isAdmin && (
+            <Link
+              to="/admin/dashboard"
+              className="
+                hidden
+                lg:flex
+                items-center
+                gap-2
+                px-4
+                py-2
+                mr-1
+                rounded-xl
+                text-amber-400
+                hover:bg-white/10
+                transition-all
+                font-semibold
+              "
+            >
+              <Settings size={18} />
+            </Link>
+          )}
+
+          {/* === AVATAR DO USUÁRIO LOGADO OU BOTÃO DE LOGIN === */}
+          {user ? (
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="
+                  flex 
+                  items-center 
+                  gap-2 
+                  pl-1 
+                  pr-2 
+                  py-1 
+                  rounded-full 
+                  bg-white/10 
+                  hover:bg-white/20 
+                  transition-all 
+                  border 
+                  border-white/10
+                "
+              >
+                <div className="h-8 w-8 bg-amber-400 text-blue-900 rounded-full flex items-center justify-center font-bold text-sm">
+                  {getInitial(user.name)}
+                </div>
+                <ChevronDown 
+                  size={16} 
+                  className={`text-white transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} 
+                />
+              </button>
+
+              {/* MENU DROPDOWN */}
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
+                  <div className="p-4 border-b border-gray-100 bg-gray-50">
+                    <p className="font-bold text-gray-800 truncate" title={user.name}>
+                      {user.name}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate mt-0.5" title={user.email}>
+                      {user.email}
+                    </p>
+                    <p className="text-[10px] font-bold text-amber-600 uppercase mt-2 tracking-wider">
+                      {user.profile?.nome || "Visitante"}
+                    </p>
+                  </div>
+
+                  <div className="p-2">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-xl transition font-medium text-sm"
+                    >
+                      <LogOut size={18} />
+                      Sair do Sistema
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsLoginModalOpen(true)}
+              className="
+                flex
+                items-center
+                gap-2
+                px-5
+                py-2.5
+                rounded-2xl
+                bg-amber-400
+                text-blue-900
+                font-semibold
+                shadow-md
+                hover:bg-amber-300
+                hover:scale-105
+                transition-all
+              "
+            >
+              <User size={16} />
+              Login
+            </button>
+          )}
+
         </div>
       </header>
 
       <LoginModal
         isOpen={isLoginModalOpen}
-        onClose={() =>
-          setIsLoginModalOpen(false)
-        }
-        onLoginSuccess={onLoginSuccess}
+        onClose={() => setIsLoginModalOpen(false)}
       />
 
       <ContactModal
