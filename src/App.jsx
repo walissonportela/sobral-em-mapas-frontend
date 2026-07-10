@@ -28,11 +28,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Mapa público */}
         <Route
           path="/"
           element={<MapView />}
         />
 
+        {/* Redirecionamento inicial do painel */}
         <Route
           path="/admin"
           element={
@@ -43,20 +45,12 @@ function App() {
           }
         />
 
+        {/* Administrador e Agente */}
         <Route
           path="/admin/dashboard"
           element={
             <ProtectedRoute roles={adminAndAgentRoles}>
               <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/admin/users"
-          element={
-            <ProtectedRoute roles={onlyAdminRoles}>
-              <Users />
             </ProtectedRoute>
           }
         />
@@ -79,12 +73,33 @@ function App() {
           }
         />
 
+        {/* Somente Administrador */}
+        <Route
+          path="/admin/users"
+          element={
+            <ProtectedRoute roles={onlyAdminRoles}>
+              <Users />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/admin/requests"
           element={
-            <ProtectedRoute roles={adminAndAgentRoles}>
+            <ProtectedRoute roles={onlyAdminRoles}>
               <Requests />
             </ProtectedRoute>
+          }
+        />
+
+        {/* Rota inexistente */}
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
           }
         />
       </Routes>

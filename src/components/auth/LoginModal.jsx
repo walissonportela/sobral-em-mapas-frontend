@@ -1,79 +1,96 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
-import api from "../../services/api";
 
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
 import AuthBanner from "./AuthBanner";
+
 import { useAuth } from "../../context/AuthContext";
+import { loginRequest } from "../../services/authService";
 
 export default function LoginModal({
   isOpen,
   onClose,
-  onLoginSuccess
+  onLoginSuccess,
 }) {
   const [tab, setTab] = useState("login");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [showPassword, setShowPassword] =
     useState(false);
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] =
     useState("");
 
   const { login } = useAuth();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const handleTabChange = (nextTab) => {
+    if (loading) return;
+
+    setTab(nextTab);
+    setError("");
+
+    if (nextTab === "cadastro") {
+      setSuccessMessage("");
+    }
+  };
+
+  const handleRegistrationSuccess = ({
+    email: registeredEmail,
+    message,
+  }) => {
+    setEmail(registeredEmail);
+    setPassword("");
+    setError("");
+    setSuccessMessage(message);
+    setTab("login");
+  };
+
+  const handleLogin = async (event) => {
+    event.preventDefault();
 
     setLoading(true);
     setError("");
 
     try {
-      const response = await api.post(
-        "/login",
-        {
-          email,
-          password,
-        }
+      const response = await loginRequest(
+        email,
+        password
       );
 
-      login(
-        response.data.user,
-        response.data.token
-      );
-
-      if (response.data.success) {
-        localStorage.setItem(
-          "admin_token",
-          response.data.token
+      if (!response.success) {
+        setError(
+          response.message ||
+            "Não foi possível realizar o login."
         );
 
-        localStorage.setItem(
-          "user_data",
-          JSON.stringify(response.data.user)
-        );
-
-        window.dispatchEvent(
-          new Event("userStateChanged")
-        );
-
-        if (onLoginSuccess) {
-          onLoginSuccess(
-            response.data.user
-          );
-        }
-
-        onClose();
+        return;
       }
-    } catch (err) {
+
+      /*
+       * O AuthContext já salva o usuário e o token
+       * no localStorage e atualiza o Header.
+       */
+      login(response.user, response.token);
+
+      if (
+        typeof onLoginSuccess === "function"
+      ) {
+        onLoginSuccess(response.user);
+      }
+
+      setEmail("");
+      setPassword("");
+      setShowPassword(false);
+      setSuccessMessage("");
+
+      onClose();
+    } catch (requestError) {
       setError(
-        err.response?.data?.message ||
+        requestError.response?.data?.message ||
           "Falha ao autenticar."
       );
     } finally {
@@ -81,30 +98,57 @@ export default function LoginModal({
     }
   };
 
+  const handleClose = () => {
+    if (loading) return;
+
+    setError("");
+    setSuccessMessage("");
+    setPassword("");
+    setShowPassword(false);
+    setTab("login");
+
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
     <div
-      onClick={onClose}
-      className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={handleClose}
+      className="
+        fixed
+        inset-0
+        z-[9999]
+        bg-black/60
+        backdrop-blur-sm
+        flex
+        items-center
+        justify-center
+        p-4
+      "
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) =>
+          event.stopPropagation()
+        }
         className="
           relative
           w-full
           max-w-5xl
-          min-h-[620px]
+          max-h-[92vh]
           bg-white
           rounded-3xl
           overflow-hidden
           shadow-2xl
           grid
-          grid-cols-2
+          grid-cols-1
+          lg:grid-cols-2
         "
       >
         <button
-          onClick={onClose}
+          type="button"
+          onClick={handleClose}
+          disabled={loading}
           className="
             absolute
             top-5
@@ -116,37 +160,62 @@ export default function LoginModal({
             items-center
             justify-center
             text-gray-500
+            bg-white/90
             hover:bg-gray-100
             hover:text-red-600
+            disabled:opacity-50
             transition
             z-20
           "
+          aria-label="Fechar"
         >
           <X size={20} />
         </button>
 
-        <AuthBanner />
+        <div className="hidden lg:block">
+          <AuthBanner />
+        </div>
 
-        <div className="p-10 flex flex-col">
-          <div className="flex gap-2 mb-8">
+        <div className="p-6 sm:p-8 lg:p-10 flex flex-col overflow-y-auto max-h-[92vh]">
+          <div className="flex gap-2 mb-7 pr-12">
             <button
-              onClick={() => setTab("login")}
-              className={`px-5 py-3 rounded-xl font-semibold transition ${
-                tab === "login"
-                  ? "bg-blue-700 text-white"
-                  : "bg-gray-100 text-gray-600"
-              }`}
+              type="button"
+              onClick={() =>
+                handleTabChange("login")
+              }
+              className={`
+                px-5
+                py-3
+                rounded-xl
+                font-semibold
+                transition
+                ${
+                  tab === "login"
+                    ? "bg-blue-700 text-white shadow-md"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }
+              `}
             >
               Login
             </button>
 
             <button
-              onClick={() => setTab("cadastro")}
-              className={`px-5 py-3 rounded-xl font-semibold transition ${
-                tab === "cadastro"
-                  ? "bg-blue-700 text-white"
-                  : "bg-gray-100 text-gray-600"
-              }`}
+              type="button"
+              onClick={() =>
+                handleTabChange("cadastro")
+              }
+              className={`
+                px-5
+                py-3
+                rounded-xl
+                font-semibold
+                transition
+                ${
+                  tab === "cadastro"
+                    ? "bg-blue-700 text-white shadow-md"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }
+              `}
             >
               Cadastre-se
             </button>
@@ -159,13 +228,32 @@ export default function LoginModal({
               showPassword={showPassword}
               loading={loading}
               error={error}
-              setEmail={setEmail}
-              setPassword={setPassword}
-              setShowPassword={setShowPassword}
+              successMessage={successMessage}
+              setEmail={(value) => {
+                setEmail(value);
+
+                if (error) {
+                  setError("");
+                }
+              }}
+              setPassword={(value) => {
+                setPassword(value);
+
+                if (error) {
+                  setError("");
+                }
+              }}
+              setShowPassword={
+                setShowPassword
+              }
               handleLogin={handleLogin}
             />
           ) : (
-            <RegisterForm />
+            <RegisterForm
+              onRegistrationSuccess={
+                handleRegistrationSuccess
+              }
+            />
           )}
         </div>
       </div>
