@@ -12,6 +12,7 @@ import Users from "./pages/admin/Users";
 import Layers from "./pages/admin/Layers";
 import Categories from "./pages/admin/Categories";
 import Requests from "./pages/admin/Requests";
+import Wms from "./pages/admin/Wms";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -69,6 +70,15 @@ function App() {
           element={
             <ProtectedRoute roles={adminAndAgentRoles}>
               <Categories />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/wms"
+          element={
+            <ProtectedRoute roles={adminAndAgentRoles}>
+              <Wms />
             </ProtectedRoute>
           }
         />

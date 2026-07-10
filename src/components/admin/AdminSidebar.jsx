@@ -8,6 +8,7 @@ import {
   ClipboardList,
   ArrowLeft,
   Map,
+  Server,
 } from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
@@ -96,6 +97,12 @@ export default function AdminSidebar() {
         label: "Categorias",
         icon: FolderTree,
         to: "/admin/categories",
+        roles: ["Administrador", "Agente"],
+      },
+      {
+        label: "Links WMS",
+        icon: Server,
+        to: "/admin/wms",
         roles: ["Administrador", "Agente"],
       },
     ],
