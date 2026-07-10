@@ -57,3 +57,15 @@ export async function deleteLayer(id) {
 
   return response.data;
 }
+
+/**
+ * Busca as layers disponíveis dentro de um link WMS
+ * usando GetCapabilities.
+ */
+export async function getAvailableWmsLayers(wmsLinkId) {
+  const response = await api.get(
+    `/admin/wms/${wmsLinkId}/layers`
+  );
+
+  return response.data;
+}

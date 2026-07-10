@@ -7,7 +7,11 @@ import {
   Map,
   FileText,
   Link as LinkIcon,
+  Search,
+  Wand2,
 } from "lucide-react";
+
+import { getAvailableWmsLayers } from "../../services/layerService";
 
 export default function LayerFormModal({
   layer,
@@ -21,12 +25,67 @@ export default function LayerFormModal({
     getInitialForm(layer)
   );
 
+  const [availableLayers, setAvailableLayers] =
+    useState([]);
+
+  const [loadingWmsLayers, setLoadingWmsLayers] =
+    useState(false);
+
+  const [wmsSearch, setWmsSearch] = useState("");
+  const [wmsError, setWmsError] = useState("");
+
   const isEditing = Boolean(layer);
 
   const handleChange = (field, value) => {
     setForm((previous) => ({
       ...previous,
       [field]: value,
+    }));
+  };
+
+  const handleFetchWmsLayers = async () => {
+    if (!form.wms_link_id) {
+      setWmsError("Selecione um link WMS antes de buscar as layers.");
+      return;
+    }
+
+    try {
+      setLoadingWmsLayers(true);
+      setWmsError("");
+
+      const response = await getAvailableWmsLayers(
+        form.wms_link_id
+      );
+
+      setAvailableLayers(response.layers || []);
+
+      if ((response.layers || []).length === 0) {
+        setWmsError("Nenhuma layer foi encontrada nesse WMS.");
+      }
+    } catch (requestError) {
+      console.error("Erro ao buscar layers do WMS:", requestError);
+
+      setWmsError(
+        requestError.response?.data?.message ||
+          "Não foi possível buscar as layers desse WMS."
+      );
+    } finally {
+      setLoadingWmsLayers(false);
+    }
+  };
+
+  const handleSelectAvailableLayer = (wmsLayer) => {
+    setForm((previous) => ({
+      ...previous,
+      name: wmsLayer.title || wmsLayer.name || previous.name,
+      layer_name: wmsLayer.name || previous.layer_name,
+      crs: wmsLayer.crs || previous.crs || "EPSG:4326",
+      legend_url: wmsLayer.legend_url || previous.legend_url || "",
+      description:
+        wmsLayer.abstract ||
+        previous.description ||
+        "",
+      type: "WMS",
     }));
   };
 
@@ -59,9 +118,23 @@ export default function LayerFormModal({
     });
   };
 
+  const filteredAvailableLayers =
+    availableLayers.filter((item) => {
+      const searchText = wmsSearch
+        .trim()
+        .toLowerCase();
+
+      if (!searchText) return true;
+
+      return (
+        item.name?.toLowerCase().includes(searchText) ||
+        item.title?.toLowerCase().includes(searchText)
+      );
+    });
+
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="w-full max-w-6xl max-h-[92vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
@@ -76,7 +149,7 @@ export default function LayerFormModal({
               </h2>
 
               <p className="text-sm text-slate-500">
-                Configure as informações da camada do mapa.
+                Configure ou busque uma camada diretamente do WMS.
               </p>
             </div>
           </div>
@@ -96,6 +169,134 @@ export default function LayerFormModal({
           onSubmit={handleSubmit}
           className="p-6 space-y-6 overflow-y-auto"
         >
+          <section className="rounded-3xl border border-blue-100 bg-blue-50/50 p-5">
+            <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Wand2
+                    size={18}
+                    className="text-blue-700"
+                  />
+
+                  <h3 className="font-black text-slate-800">
+                    Buscar layers disponíveis no WMS
+                  </h3>
+                </div>
+
+                <p className="text-sm text-slate-500 mt-1">
+                  Selecione um link WMS e consulte o GetCapabilities para preencher o cadastro automaticamente.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleFetchWmsLayers}
+                disabled={
+                  loading ||
+                  loadingWmsLayers ||
+                  !form.wms_link_id
+                }
+                className="px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
+              >
+                {loadingWmsLayers ? (
+                  <>
+                    <Loader2
+                      size={18}
+                      className="animate-spin"
+                    />
+                    Buscando...
+                  </>
+                ) : (
+                  <>
+                    <Search size={18} />
+                    Buscar layers
+                  </>
+                )}
+              </button>
+            </div>
+
+            {wmsError && (
+              <div className="mb-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 p-4 text-sm">
+                {wmsError}
+              </div>
+            )}
+
+            {availableLayers.length > 0 && (
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search
+                    size={17}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    type="text"
+                    value={wmsSearch}
+                    onChange={(event) =>
+                      setWmsSearch(event.target.value)
+                    }
+                    placeholder="Filtrar layers encontradas..."
+                    className="
+                      w-full
+                      pl-11
+                      pr-4
+                      py-3
+                      rounded-2xl
+                      border
+                      border-slate-200
+                      outline-none
+                      focus:border-blue-500
+                      focus:ring-4
+                      focus:ring-blue-100
+                      transition
+                    "
+                  />
+                </div>
+
+                <div className="max-h-64 overflow-y-auto rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
+                  {filteredAvailableLayers.map((item) => (
+                    <button
+                      key={item.name}
+                      type="button"
+                      onClick={() =>
+                        handleSelectAvailableLayer(item)
+                      }
+                      className="
+                        w-full
+                        text-left
+                        p-4
+                        hover:bg-blue-50
+                        transition
+                      "
+                    >
+                      <p className="font-black text-slate-800">
+                        {item.title || item.name}
+                      </p>
+
+                      <p className="text-xs text-blue-700 font-semibold mt-1">
+                        {item.name}
+                      </p>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {item.crs && (
+                          <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                            {item.crs}
+                          </span>
+                        )}
+
+                        {item.legend_url && (
+                          <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold">
+                            Legenda disponível
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
           <section>
             <div className="flex items-center gap-2 mb-4">
               <Map
@@ -256,12 +457,16 @@ export default function LayerFormModal({
               <FormField label="Link WMS">
                 <select
                   value={form.wms_link_id}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     handleChange(
                       "wms_link_id",
                       event.target.value
-                    )
-                  }
+                    );
+
+                    setAvailableLayers([]);
+                    setWmsError("");
+                    setWmsSearch("");
+                  }}
                   disabled={loading}
                   className={inputClass}
                 >
