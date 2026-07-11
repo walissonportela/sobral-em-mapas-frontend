@@ -38,7 +38,9 @@ import SearchPanel from "./SearchPanel";
 
 import { jsPDF } from "jspdf";
 
-const API_BASE_URL = "http://localhost:8080/api";
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:8080/api";
 
 export default function Sidebar({
   activeLayers = [],
