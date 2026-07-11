@@ -138,19 +138,31 @@ export default function Map({
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-        {activeLayers.map((layer) => (
-          <WMSTileLayer
-            key={layer.id}
-            url="http://localhost:8080/api/proxy-wms"
-            params={{
-              layers:
-                layer.layer_name,
-              transparent: true,
-              format: "image/png",
-              version: "1.1.1",
-            }}
-          />
-        ))}
+        {activeLayers.map((layer) => {
+          const wmsLink =
+            layer.wms_link ||
+            layer.wmsLink ||
+            null;
+
+          return (
+            <WMSTileLayer
+              key={layer.id}
+              url="http://localhost:8080/api/proxy-wms"
+              params={{
+                layers: layer.layer_name,
+                transparent: true,
+                format: "image/png",
+                version:
+                  wmsLink?.version ||
+                  "1.1.1",
+                wms_link_id:
+                  layer.wms_link_id ||
+                  wmsLink?.id ||
+                  "",
+              }}
+            />
+          );
+        })}
 
         {sobralGeoJson && (
           <GeoJSON

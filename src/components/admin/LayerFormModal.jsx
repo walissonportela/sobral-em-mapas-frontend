@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   X,
   Layers,
@@ -9,9 +9,27 @@ import {
   Link as LinkIcon,
   Search,
   Wand2,
+  Eye,
+  EyeOff,
+  RotateCcw,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 
+import {
+  MapContainer,
+  TileLayer,
+  WMSTileLayer,
+} from "react-leaflet";
+
+import "leaflet/dist/leaflet.css";
+
 import { getAvailableWmsLayers } from "../../services/layerService";
+
+const PROXY_WMS_URL =
+  "http://localhost:8080/api/proxy-wms";
+
+const SOBRAL_CENTER = [-3.6892, -40.3489];
 
 export default function LayerFormModal({
   layer,
@@ -34,18 +52,68 @@ export default function LayerFormModal({
   const [wmsSearch, setWmsSearch] = useState("");
   const [wmsError, setWmsError] = useState("");
 
+  const [previewConfig, setPreviewConfig] =
+    useState(null);
+
+  const [previewError, setPreviewError] =
+    useState("");
+
+  const [previewLoading, setPreviewLoading] =
+    useState(false);
+
   const isEditing = Boolean(layer);
+
+  const selectedWmsLink = useMemo(() => {
+    return (
+      wmsLinks.find(
+        (item) =>
+          String(item.id) ===
+          String(form.wms_link_id)
+      ) || null
+    );
+  }, [wmsLinks, form.wms_link_id]);
+
+  const filteredAvailableLayers =
+    availableLayers.filter((item) => {
+      const searchText = wmsSearch
+        .trim()
+        .toLowerCase();
+
+      if (!searchText) return true;
+
+      return (
+        item.name
+          ?.toLowerCase()
+          .includes(searchText) ||
+        item.title
+          ?.toLowerCase()
+          .includes(searchText) ||
+        removeWorkspacePrefix(item.name)
+          .toLowerCase()
+          .includes(searchText)
+      );
+    });
 
   const handleChange = (field, value) => {
     setForm((previous) => ({
       ...previous,
       [field]: value,
     }));
+
+    if (
+      field === "layer_name" ||
+      field === "wms_link_id"
+    ) {
+      setPreviewConfig(null);
+      setPreviewError("");
+    }
   };
 
   const handleFetchWmsLayers = async () => {
     if (!form.wms_link_id) {
-      setWmsError("Selecione um link WMS antes de buscar as layers.");
+      setWmsError(
+        "Selecione um link WMS antes de buscar as layers."
+      );
       return;
     }
 
@@ -57,16 +125,24 @@ export default function LayerFormModal({
         form.wms_link_id
       );
 
-      setAvailableLayers(response.layers || []);
+      const layers = response.layers || [];
 
-      if ((response.layers || []).length === 0) {
-        setWmsError("Nenhuma layer foi encontrada nesse WMS.");
+      setAvailableLayers(layers);
+
+      if (layers.length === 0) {
+        setWmsError(
+          "Nenhuma layer foi encontrada nesse WMS."
+        );
       }
     } catch (requestError) {
-      console.error("Erro ao buscar layers do WMS:", requestError);
+      console.error(
+        "Erro ao buscar layers do WMS:",
+        requestError
+      );
 
       setWmsError(
         requestError.response?.data?.message ||
+          requestError.response?.data?.error ||
           "Não foi possível buscar as layers desse WMS."
       );
     } finally {
@@ -75,18 +151,64 @@ export default function LayerFormModal({
   };
 
   const handleSelectAvailableLayer = (wmsLayer) => {
+    const originalTechnicalName = wmsLayer.name || "";
+
+    const technicalName = removeWorkspacePrefix(
+      originalTechnicalName
+    );
+
+    const displayName = getFriendlyLayerName(
+      wmsLayer.title,
+      technicalName
+    );
+
     setForm((previous) => ({
       ...previous,
-      name: wmsLayer.title || wmsLayer.name || previous.name,
-      layer_name: wmsLayer.name || previous.layer_name,
-      crs: wmsLayer.crs || previous.crs || "EPSG:4326",
-      legend_url: wmsLayer.legend_url || previous.legend_url || "",
+      name: displayName || previous.name,
+      layer_name: technicalName || previous.layer_name,
+      crs:
+        wmsLayer.crs ||
+        previous.crs ||
+        "EPSG:4326",
+      legend_url:
+        wmsLayer.legend_url ||
+        previous.legend_url ||
+        "",
       description:
         wmsLayer.abstract ||
         previous.description ||
         "",
       type: "WMS",
     }));
+
+    setPreviewConfig(null);
+    setPreviewError("");
+  };
+
+  const handlePreview = () => {
+    if (!form.layer_name.trim()) {
+      setPreviewError(
+        "Informe o nome técnico da camada antes de pré-visualizar."
+      );
+      return;
+    }
+
+    setPreviewError("");
+    setPreviewLoading(true);
+
+    setPreviewConfig({
+      key: `${form.layer_name}-${form.wms_link_id}-${Date.now()}`,
+      layerName: form.layer_name.trim(),
+      wmsLinkId: form.wms_link_id || "",
+      version:
+        selectedWmsLink?.version || "1.1.1",
+    });
+  };
+
+  const handleClearPreview = () => {
+    setPreviewConfig(null);
+    setPreviewError("");
+    setPreviewLoading(false);
   };
 
   const handleSubmit = (event) => {
@@ -98,13 +220,18 @@ export default function LayerFormModal({
       crs: form.crs.trim() || "EPSG:4326",
       legend_url: form.legend_url.trim() || null,
       type: form.type || "WMS",
-      description: form.description.trim() || null,
-      order: form.order === "" ? 0 : Number(form.order),
+      description:
+        form.description.trim() || null,
+      order:
+        form.order === ""
+          ? 0
+          : Number(form.order),
       subcategory:
         form.subcategory === ""
           ? null
           : Number(form.subcategory),
-      image_path: form.image_path.trim() || null,
+      image_path:
+        form.image_path.trim() || null,
       max_scale:
         form.max_scale === ""
           ? null
@@ -118,23 +245,9 @@ export default function LayerFormModal({
     });
   };
 
-  const filteredAvailableLayers =
-    availableLayers.filter((item) => {
-      const searchText = wmsSearch
-        .trim()
-        .toLowerCase();
-
-      if (!searchText) return true;
-
-      return (
-        item.name?.toLowerCase().includes(searchText) ||
-        item.title?.toLowerCase().includes(searchText)
-      );
-    });
-
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl max-h-[92vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="w-full max-w-7xl max-h-[92vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
@@ -149,7 +262,7 @@ export default function LayerFormModal({
               </h2>
 
               <p className="text-sm text-slate-500">
-                Configure ou busque uma camada diretamente do WMS.
+                Configure, busque no WMS e pré-visualize antes de salvar.
               </p>
             </div>
           </div>
@@ -184,7 +297,7 @@ export default function LayerFormModal({
                 </div>
 
                 <p className="text-sm text-slate-500 mt-1">
-                  Selecione um link WMS e consulte o GetCapabilities para preencher o cadastro automaticamente.
+                  Escolha um link WMS, busque as camadas disponíveis e clique em uma delas para preencher o formulário.
                 </p>
               </div>
 
@@ -254,44 +367,84 @@ export default function LayerFormModal({
                 </div>
 
                 <div className="max-h-64 overflow-y-auto rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
-                  {filteredAvailableLayers.map((item) => (
-                    <button
-                      key={item.name}
-                      type="button"
-                      onClick={() =>
-                        handleSelectAvailableLayer(item)
-                      }
-                      className="
-                        w-full
-                        text-left
-                        p-4
-                        hover:bg-blue-50
-                        transition
-                      "
-                    >
-                      <p className="font-black text-slate-800">
-                        {item.title || item.name}
-                      </p>
+                  {filteredAvailableLayers.map(
+                    (item) => {
+                      const cleanTechnicalName =
+                        removeWorkspacePrefix(
+                          item.name
+                        );
 
-                      <p className="text-xs text-blue-700 font-semibold mt-1">
-                        {item.name}
-                      </p>
+                      const isSelected =
+                        cleanTechnicalName ===
+                        form.layer_name;
 
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {item.crs && (
-                          <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
-                            {item.crs}
-                          </span>
-                        )}
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() =>
+                            handleSelectAvailableLayer(
+                              item
+                            )
+                          }
+                          className={`
+                            w-full
+                            text-left
+                            p-4
+                            transition
+                            ${
+                              isSelected
+                                ? "bg-blue-50"
+                                : "hover:bg-blue-50"
+                            }
+                          `}
+                        >
+                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                            <div>
+                              <p className="font-black text-slate-800">
+                                {getFriendlyLayerName(
+                                  item.title,
+                                  cleanTechnicalName
+                                )}
+                              </p>
 
-                        {item.legend_url && (
-                          <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold">
-                            Legenda disponível
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
+                              <p className="text-xs text-blue-700 font-semibold mt-1">
+                                Original WMS: {item.name}
+                              </p>
+
+                              <p className="text-xs text-green-700 font-black mt-1">
+                                Será salvo como:{" "}
+                                {cleanTechnicalName}
+                              </p>
+                            </div>
+
+                            {isSelected && (
+                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-black">
+                                <CheckCircle2
+                                  size={13}
+                                />
+                                Selecionada
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {item.crs && (
+                              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                                {item.crs}
+                              </span>
+                            )}
+
+                            {item.legend_url && (
+                              <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold">
+                                Legenda disponível
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    }
+                  )}
                 </div>
               </div>
             )}
@@ -323,9 +476,13 @@ export default function LayerFormModal({
                   disabled={loading}
                   required
                   autoFocus
-                  placeholder="Ex: Escolas Municipais"
+                  placeholder="Ex: Praças, Escolas, Bares..."
                   className={inputClass}
                 />
+
+                <HelpText>
+                  Esse é o nome que aparece para o usuário no sistema.
+                </HelpText>
               </FormField>
 
               <FormField label="Nome técnico da camada">
@@ -340,9 +497,13 @@ export default function LayerFormModal({
                   }
                   disabled={loading}
                   required
-                  placeholder="Ex: workspace:camada"
+                  placeholder="Ex: bar_map"
                   className={inputClass}
                 />
+
+                <HelpText>
+                  No seu projeto, salve sem o prefixo do workspace. Exemplo: use bar_map, não Ceara:bar_map.
+                </HelpText>
               </FormField>
 
               <FormField label="Tipo">
@@ -358,8 +519,12 @@ export default function LayerFormModal({
                   className={inputClass}
                 >
                   <option value="WMS">WMS</option>
-                  <option value="GeoJSON">GeoJSON</option>
-                  <option value="Raster">Raster</option>
+                  <option value="GeoJSON">
+                    GeoJSON
+                  </option>
+                  <option value="Raster">
+                    Raster
+                  </option>
                 </select>
               </FormField>
 
@@ -443,14 +608,18 @@ export default function LayerFormModal({
                     Sem subcategoria
                   </option>
 
-                  {subcategories.map((subcategory) => (
-                    <option
-                      key={subcategory.id}
-                      value={subcategory.id}
-                    >
-                      {getSubcategoryLabel(subcategory)}
-                    </option>
-                  ))}
+                  {subcategories.map(
+                    (subcategory) => (
+                      <option
+                        key={subcategory.id}
+                        value={subcategory.id}
+                      >
+                        {getSubcategoryLabel(
+                          subcategory
+                        )}
+                      </option>
+                    )
+                  )}
                 </select>
               </FormField>
 
@@ -466,6 +635,8 @@ export default function LayerFormModal({
                     setAvailableLayers([]);
                     setWmsError("");
                     setWmsSearch("");
+                    setPreviewConfig(null);
+                    setPreviewError("");
                   }}
                   disabled={loading}
                   className={inputClass}
@@ -483,6 +654,12 @@ export default function LayerFormModal({
                     </option>
                   ))}
                 </select>
+
+                {selectedWmsLink && (
+                  <HelpText>
+                    URL: {selectedWmsLink.url}
+                  </HelpText>
+                )}
               </FormField>
 
               <FormField label="URL da legenda">
@@ -562,6 +739,142 @@ export default function LayerFormModal({
             </div>
           </section>
 
+          <section className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Eye
+                    size={18}
+                    className="text-blue-700"
+                  />
+
+                  <h3 className="font-black text-slate-800">
+                    Pré-visualização da camada
+                  </h3>
+                </div>
+
+                <p className="text-sm text-slate-500 mt-1">
+                  Veja como a camada vai aparecer no mapa antes de salvar.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  disabled={
+                    loading ||
+                    !form.layer_name.trim()
+                  }
+                  className="px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center gap-2"
+                >
+                  <Eye size={18} />
+                  Pré-visualizar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearPreview}
+                  disabled={!previewConfig}
+                  className="px-5 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                >
+                  <EyeOff size={18} />
+                  Limpar
+                </button>
+              </div>
+            </div>
+
+            {previewError && (
+              <div className="mb-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 p-4 text-sm flex gap-2">
+                <AlertTriangle
+                  size={18}
+                  className="shrink-0 mt-0.5"
+                />
+                {previewError}
+              </div>
+            )}
+
+            <div className="rounded-3xl overflow-hidden border border-slate-200 bg-white">
+              <div className="h-[360px] relative">
+                {!previewConfig ? (
+                  <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
+                    <div>
+                      <div className="h-16 w-16 rounded-3xl bg-blue-100 text-blue-700 flex items-center justify-center mx-auto">
+                        <Map size={30} />
+                      </div>
+
+                      <h4 className="font-black text-slate-800 mt-4">
+                        Nenhuma pré-visualização carregada
+                      </h4>
+
+                      <p className="text-sm text-slate-500 mt-2 max-w-md">
+                        Escolha uma layer ou informe o nome técnico e clique em “Pré-visualizar”.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {previewLoading && (
+                      <div className="absolute inset-0 z-[500] bg-white/70 backdrop-blur-sm flex items-center justify-center">
+                        <div className="flex items-center gap-2 text-blue-700 font-bold">
+                          <Loader2
+                            size={20}
+                            className="animate-spin"
+                          />
+                          Carregando prévia...
+                        </div>
+                      </div>
+                    )}
+
+                    <PreviewMap
+                      key={previewConfig.key}
+                      config={previewConfig}
+                      onLoaded={() =>
+                        setPreviewLoading(false)
+                      }
+                      onError={() => {
+                        setPreviewLoading(false);
+                        setPreviewError(
+                          "A camada não carregou na prévia. Confira se o nome técnico está correto. No seu projeto, normalmente ele deve estar sem o prefixo do workspace."
+                        );
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+
+              {previewConfig && (
+                <div className="p-4 border-t border-slate-200 bg-white">
+                  <p className="text-xs font-black text-slate-500 uppercase">
+                    Parâmetros da prévia
+                  </p>
+
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <InfoBox
+                      label="Layer"
+                      value={
+                        previewConfig.layerName
+                      }
+                    />
+
+                    <InfoBox
+                      label="Formato"
+                      value="image/png"
+                    />
+
+                    <InfoBox
+                      label="WMS"
+                      value={
+                        selectedWmsLink?.name ||
+                        "Proxy padrão"
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
           <section>
             <div className="flex items-center gap-2 mb-4">
               <FileText
@@ -592,44 +905,100 @@ export default function LayerFormModal({
             />
           </section>
 
-          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="px-5 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition disabled:opacity-50"
-            >
-              Cancelar
-            </button>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-2 border-t border-slate-100">
+            <div className="text-sm text-slate-500">
+              Dica: o nome técnico salvo será sempre o nome sem o prefixo do workspace.
+            </div>
 
-            <button
-              type="submit"
-              disabled={
-                loading ||
-                !form.name.trim() ||
-                !form.layer_name.trim()
-              }
-              className="px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2
-                    size={18}
-                    className="animate-spin"
-                  />
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Save size={18} />
-                  Salvar camada
-                </>
-              )}
-            </button>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={loading}
+                className="px-5 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setForm((previous) => ({
+                    ...previous,
+                    name: getFriendlyLayerName(
+                      previous.name,
+                      previous.layer_name
+                    ),
+                  }));
+                }}
+                disabled={loading}
+                className="px-5 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition flex items-center gap-2"
+              >
+                <RotateCcw size={18} />
+                Ajustar nome
+              </button>
+
+              <button
+                type="submit"
+                disabled={
+                  loading ||
+                  !form.name.trim() ||
+                  !form.layer_name.trim()
+                }
+                className="px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2
+                      size={18}
+                      className="animate-spin"
+                    />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    Salvar camada
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
     </div>
+  );
+}
+
+function PreviewMap({
+  config,
+  onLoaded,
+  onError,
+}) {
+  return (
+    <MapContainer
+      center={SOBRAL_CENTER}
+      zoom={13}
+      zoomControl
+      className="h-full w-full"
+    >
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+      <WMSTileLayer
+        url={PROXY_WMS_URL}
+        params={{
+          layers: config.layerName,
+          transparent: true,
+          format: "image/png",
+          version: config.version || "1.1.1",
+          wms_link_id: config.wmsLinkId || "",
+        }}
+        eventHandlers={{
+          load: onLoaded,
+          tileerror: onError,
+        }}
+      />
+    </MapContainer>
   );
 }
 
@@ -641,6 +1010,28 @@ function FormField({ label, children }) {
       </label>
 
       {children}
+    </div>
+  );
+}
+
+function HelpText({ children }) {
+  return (
+    <p className="text-xs text-slate-400 mt-1">
+      {children}
+    </p>
+  );
+}
+
+function InfoBox({ label, value }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3 min-w-0">
+      <p className="text-[10px] font-black text-slate-400 uppercase">
+        {label}
+      </p>
+
+      <p className="text-sm font-bold text-slate-700 break-all mt-1">
+        {value}
+      </p>
     </div>
   );
 }
@@ -736,4 +1127,38 @@ function getWmsLabel(wmsLink) {
     wmsLink.link ||
     `WMS #${wmsLink.id}`
   );
+}
+
+function removeWorkspacePrefix(value) {
+  if (!value) return "";
+
+  const parts = String(value).split(":");
+
+  return parts[parts.length - 1];
+}
+
+function getFriendlyLayerName(title, technicalName) {
+  const cleanedTitle = removeWorkspacePrefix(
+    title || ""
+  );
+
+  const cleanedTechnicalName =
+    removeWorkspacePrefix(technicalName || "");
+
+  const raw =
+    cleanedTitle &&
+    cleanedTitle !== cleanedTechnicalName
+      ? cleanedTitle
+      : cleanedTechnicalName || cleanedTitle;
+
+  if (!raw) return "";
+
+  return String(raw)
+    .replace(/_/g, " ")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase()
+    );
 }
