@@ -330,7 +330,7 @@ const Chatbot = () => {
     `;
 
     return (
-        <div className="navisol-wrapper">
+        <div data-tour="chat-button" className="navisol-wrapper">
             <style>{chatStyles}</style>
 
             {!isOpen ? (

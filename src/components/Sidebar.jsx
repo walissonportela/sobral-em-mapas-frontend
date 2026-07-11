@@ -223,6 +223,7 @@ export default function Sidebar({
       }`}
     >
       <div
+        data-tour="sidebar"
         className="
           w-16
           bg-gradient-to-b
@@ -238,6 +239,7 @@ export default function Sidebar({
         "
       >
         <SidebarButton
+          dataTour="layers-button"
           tooltip="Camadas"
           active={activePanel === "layers"}
           onClick={() => setActivePanel("layers")}
@@ -245,6 +247,7 @@ export default function Sidebar({
         />
 
         <SidebarButton
+          dataTour="legend-button"
           tooltip="Legendas"
           active={activePanel === "legends"}
           onClick={() => setActivePanel("legends")}
@@ -253,6 +256,7 @@ export default function Sidebar({
         />
 
         <SidebarButton
+          dataTour="search-button"
           tooltip="Buscar Local"
           active={activePanel === "search"}
           onClick={() => setActivePanel("search")}
@@ -794,11 +798,13 @@ function SidebarButton({
   tooltip,
   active,
   onClick,
+  dataTour,
   badge = 0,
 }) {
   return (
     <div className="group relative">
       <button
+        data-tour={dataTour}
         type="button"
         onClick={onClick}
         className={`

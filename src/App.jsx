@@ -6,6 +6,7 @@ import {
 } from "react-router-dom";
 
 import MapView from "./pages/MapView";
+import About from "./pages/About";
 
 import Dashboard from "./pages/admin/Dashboard";
 import Users from "./pages/admin/Users";
@@ -33,6 +34,12 @@ function App() {
         <Route
           path="/"
           element={<MapView />}
+        />
+
+        {/* Sobre o sistema */}
+        <Route
+          path="/sobre"
+          element={<About />}
         />
 
         {/* Redirecionamento inicial do painel */}
