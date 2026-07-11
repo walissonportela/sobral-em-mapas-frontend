@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+
 import {
   Search,
   ChevronDown,
@@ -18,17 +19,21 @@ import {
   Landmark,
   FolderTree,
   MapPinned,
-  BarChart3,
   Printer,
   Maximize,
   Eraser,
   Info,
   Bookmark,
   ImageOff,
+  Ruler,
+  Star,
+  FileText,
+  Image as ImageIcon,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
 import api from "../services/api";
-
 import SearchPanel from "./SearchPanel";
 
 const API_BASE_URL = "http://localhost:8080/api";
@@ -38,6 +43,8 @@ export default function Sidebar({
   onToggleLayer,
   onClearMap,
   onSearchLocation,
+  mapToolsRef,
+  forceOpenSignal,
 }) {
   const [isOpen, setIsOpen] = useState(true);
   const [layers, setLayers] = useState([]);
@@ -47,36 +54,76 @@ export default function Sidebar({
   const [activePanel, setActivePanel] =
     useState("layers");
 
+  const [favoriteLayerIds, setFavoriteLayerIds] =
+    useState(() => {
+      try {
+        const saved = JSON.parse(
+          localStorage.getItem(
+            "sobral_map_favorite_layers"
+          ) || "[]"
+        );
+
+        return Array.isArray(saved)
+          ? saved.map(String)
+          : [];
+      } catch {
+        return [];
+      }
+    });
+
   useEffect(() => {
-    loadLayers();
-  }, []);
+    localStorage.setItem(
+      "sobral_map_favorite_layers",
+      JSON.stringify(favoriteLayerIds)
+    );
+  }, [favoriteLayerIds]);
 
-  async function loadLayers() {
-    try {
-      const response = await api.get("/map-data");
-
-      const data =
-        response.data?.data?.layers || [];
-
-      setLayers(data);
-
-      const categories = {};
-
-      data.forEach((layer) => {
-        const cat =
-          layer.subcategory?.category?.name ||
-          "Geral";
-
-        categories[cat] = false;
-      });
-
-      setExpanded(categories);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (forceOpenSignal > 0) {
+      setIsOpen(true);
     }
-  }
+  }, [forceOpenSignal]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadLayers() {
+      try {
+        const response = await api.get("/map-data");
+
+        if (!isMounted) return;
+
+        const data =
+          response.data?.data?.layers || [];
+
+        setLayers(data);
+
+        const categories = {};
+
+        data.forEach((layer) => {
+          const category =
+            layer.subcategory?.category?.name ||
+            "Geral";
+
+          categories[category] = false;
+        });
+
+        setExpanded(categories);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadLayers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const grouped = useMemo(() => {
     const result = {};
@@ -110,10 +157,43 @@ export default function Sidebar({
     return result;
   }, [layers, search]);
 
+  const favoriteLayers = useMemo(() => {
+    return layers.filter((layer) =>
+      favoriteLayerIds.includes(
+        String(layer.id)
+      )
+    );
+  }, [layers, favoriteLayerIds]);
+
   const isLayerActive = (layer) => {
     return activeLayers.some(
       (item) => item.id === layer.id
     );
+  };
+
+  const isLayerFavorite = (layer) => {
+    return favoriteLayerIds.includes(
+      String(layer.id)
+    );
+  };
+
+  const toggleFavoriteLayer = (layerId) => {
+    const id = String(layerId);
+
+    setFavoriteLayerIds((previous) => {
+      if (previous.includes(id)) {
+        return previous.filter(
+          (item) => item !== id
+        );
+      }
+
+      return [...previous, id];
+    });
+  };
+
+  const handleClearEverything = () => {
+    onClearMap?.();
+    mapToolsRef?.current?.clearDrawings?.();
   };
 
   const getCategoryIcon = (category) => {
@@ -264,29 +344,40 @@ export default function Sidebar({
         />
 
         <SidebarButton
+          dataTour="measure-button"
+          tooltip="Medição"
+          active={activePanel === "measure"}
+          onClick={() => setActivePanel("measure")}
+          icon={<Ruler size={20} />}
+        />
+
+        <SidebarButton
+          dataTour="bookmarks-button"
           tooltip="Marcadores"
           active={activePanel === "bookmarks"}
           onClick={() => setActivePanel("bookmarks")}
           icon={<Bookmark size={20} />}
+          badge={favoriteLayers.length}
         />
 
         <SidebarButton
-          tooltip="Limpar Mapa"
-          active={false}
-          onClick={onClearMap}
-          icon={<Eraser size={20} />}
-        />
-
-        <SidebarButton
-          tooltip="Imprimir"
-          active={false}
-          onClick={() => {
-            console.log("Imprimir futuramente");
-          }}
+          dataTour="print-button"
+          tooltip="Impressão"
+          active={activePanel === "print"}
+          onClick={() => setActivePanel("print")}
           icon={<Printer size={20} />}
         />
 
         <SidebarButton
+          dataTour="clear-button"
+          tooltip="Limpar Mapa"
+          active={false}
+          onClick={handleClearEverything}
+          icon={<Eraser size={20} />}
+        />
+
+        <SidebarButton
+          dataTour="fullscreen-button"
           tooltip="Tela Cheia"
           active={false}
           onClick={toggleFullscreen}
@@ -370,8 +461,8 @@ export default function Sidebar({
 
                 <input
                   value={search}
-                  onChange={(e) =>
-                    setSearch(e.target.value)
+                  onChange={(event) =>
+                    setSearch(event.target.value)
                   }
                   placeholder="Pesquisar camadas..."
                   className="
@@ -482,40 +573,22 @@ export default function Sidebar({
                                 </div>
 
                                 {items.map((layer) => (
-                                  <label
+                                  <LayerRow
                                     key={layer.id}
-                                    className="
-                                      flex
-                                      items-center
-                                      gap-3
-                                      px-3
-                                      py-2.5
-                                      rounded-xl
-                                      border
-                                      border-transparent
-                                      hover:bg-blue-50
-                                      hover:border-blue-100
-                                      cursor-pointer
-                                      transition-all
-                                    "
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isLayerActive(
-                                        layer
-                                      )}
-                                      onChange={() =>
-                                        onToggleLayer(
-                                          layer
-                                        )
-                                      }
-                                      className="h-4 w-4 accent-blue-700"
-                                    />
-
-                                    <span className="text-sm font-medium text-gray-700">
-                                      {layer.name}
-                                    </span>
-                                  </label>
+                                    layer={layer}
+                                    active={isLayerActive(
+                                      layer
+                                    )}
+                                    favorite={isLayerFavorite(
+                                      layer
+                                    )}
+                                    onToggleLayer={
+                                      onToggleLayer
+                                    }
+                                    onToggleFavorite={
+                                      toggleFavoriteLayer
+                                    }
+                                  />
                                 ))}
                               </div>
                             )
@@ -624,143 +697,31 @@ export default function Sidebar({
 
         {activePanel === "search" && (
           <>
-            <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
-                  <Search size={20} />
-                </div>
-
-                <div>
-                  <h2 className="font-bold text-lg">
-                    Buscar Local
-                  </h2>
-
-                  <p className="text-xs text-blue-200">
-                    Pesquise endereços, bairros ou coordenadas
-                  </p>
-                </div>
-              </div>
-            </div>
+            <PanelHeader
+              icon={<Search size={22} />}
+              title="Buscar Local"
+              subtitle="Pesquise endereços, bairros ou coordenadas"
+            />
 
             <SearchPanel onSearch={onSearchLocation} />
           </>
         )}
 
+        {activePanel === "measure" && (
+          <MeasurePanel mapToolsRef={mapToolsRef} />
+        )}
+
         {activePanel === "bookmarks" && (
-          <>
-            <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
-                  <Bookmark size={20} />
-                </div>
-
-                <div>
-                  <h2 className="font-bold text-lg">
-                    Marcadores
-                  </h2>
-
-                  <p className="text-xs text-blue-200">
-                    Locais salvos no mapa
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 p-6">
-              <div className="border-2 border-dashed border-gray-200 rounded-2xl h-full flex flex-col items-center justify-center text-center">
-                <Bookmark
-                  size={42}
-                  className="text-gray-300 mb-3"
-                />
-
-                <h3 className="font-semibold text-gray-700">
-                  Marcadores
-                </h3>
-
-                <p className="text-sm text-gray-500 mt-2 max-w-xs">
-                  Espaço reservado para locais favoritos e pontos salvos.
-                </p>
-              </div>
-            </div>
-          </>
+          <BookmarksPanel
+            favoriteLayers={favoriteLayers}
+            onToggleFavorite={toggleFavoriteLayer}
+            onToggleLayer={onToggleLayer}
+            isLayerActive={isLayerActive}
+          />
         )}
 
-        {activePanel === "dashboard" && (
-          <>
-            <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
-                  <BarChart3 size={20} />
-                </div>
-
-                <div>
-                  <h2 className="font-bold text-lg">
-                    Indicadores
-                  </h2>
-
-                  <p className="text-xs text-blue-200">
-                    Dashboards e estatísticas
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 p-6">
-              <div className="border-2 border-dashed border-gray-200 rounded-2xl h-full flex flex-col items-center justify-center text-center">
-                <BarChart3
-                  size={42}
-                  className="text-gray-300 mb-3"
-                />
-
-                <h3 className="font-semibold text-gray-700">
-                  Painéis Analíticos
-                </h3>
-
-                <p className="text-sm text-gray-500 mt-2 max-w-xs">
-                  Espaço reservado para gráficos, indicadores e relatórios.
-                </p>
-              </div>
-            </div>
-          </>
-        )}
-
-        {activePanel === "query" && (
-          <>
-            <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
-                  <MapPinned size={20} />
-                </div>
-
-                <div>
-                  <h2 className="font-bold text-lg">
-                    Consulta Espacial
-                  </h2>
-
-                  <p className="text-xs text-blue-200">
-                    Informações geográficas
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 p-6">
-              <div className="border-2 border-dashed border-gray-200 rounded-2xl h-full flex flex-col items-center justify-center text-center">
-                <MapPinned
-                  size={42}
-                  className="text-gray-300 mb-3"
-                />
-
-                <h3 className="font-semibold text-gray-700">
-                  Consulta de Feições
-                </h3>
-
-                <p className="text-sm text-gray-500 mt-2 max-w-xs">
-                  Espaço reservado para identificação, consultas espaciais e seleção.
-                </p>
-              </div>
-            </div>
-          </>
+        {activePanel === "print" && (
+          <PrintPanel activeLayers={activeLayers} />
         )}
       </aside>
 
@@ -802,9 +763,19 @@ function SidebarButton({
   badge = 0,
 }) {
   return (
-    <div className="group relative">
+    <div
+      data-tour={dataTour}
+      className="
+        group
+        relative
+        h-12
+        w-12
+        flex
+        items-center
+        justify-center
+      "
+    >
       <button
-        data-tour={dataTour}
         type="button"
         onClick={onClick}
         className={`
@@ -882,6 +853,116 @@ function SidebarButton({
   );
 }
 
+function LayerRow({
+  layer,
+  active,
+  favorite,
+  onToggleLayer,
+  onToggleFavorite,
+}) {
+  const inputId = `layer-checkbox-${layer.id}`;
+
+  return (
+    <div
+      className="
+        flex
+        items-center
+        gap-3
+        px-3
+        py-2.5
+        rounded-xl
+        border
+        border-transparent
+        hover:bg-blue-50
+        hover:border-blue-100
+        transition-all
+      "
+    >
+      <input
+        id={inputId}
+        type="checkbox"
+        checked={active}
+        onChange={() => onToggleLayer(layer)}
+        className="h-4 w-4 accent-blue-700 shrink-0"
+      />
+
+      <label
+        htmlFor={inputId}
+        className="text-sm font-medium text-gray-700 truncate flex-1 cursor-pointer"
+      >
+        {layer.name}
+      </label>
+
+      <button
+        type="button"
+        onClick={() => onToggleFavorite(layer.id)}
+        className="
+          h-8
+          w-8
+          rounded-xl
+          flex
+          items-center
+          justify-center
+          hover:bg-amber-50
+          transition-all
+          shrink-0
+        "
+        title={
+          favorite
+            ? "Remover dos marcadores"
+            : "Adicionar aos marcadores"
+        }
+      >
+        <Star
+          size={16}
+          className={
+            favorite
+              ? "text-amber-500"
+              : "text-slate-300"
+          }
+          fill={favorite ? "currentColor" : "none"}
+        />
+      </button>
+    </div>
+  );
+}
+
+function PanelHeader({
+  icon,
+  title,
+  subtitle,
+  count,
+}) {
+  return (
+    <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5 border-b border-white/10">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 rounded-2xl bg-white/15 flex items-center justify-center shadow-lg border border-white/10">
+            {icon}
+          </div>
+
+          <div>
+            <h2 className="font-bold text-xl leading-none">
+              {title}
+            </h2>
+
+            <p className="text-xs text-blue-200 mt-1">
+              {subtitle}
+            </p>
+          </div>
+        </div>
+
+        {count !== null &&
+          count !== undefined && (
+            <div className="px-3 py-1.5 rounded-full bg-white/10 text-[12px] font-bold text-blue-100 border border-white/10">
+              {count}
+            </div>
+          )}
+      </div>
+    </div>
+  );
+}
+
 function LegendPanel({ activeLayers = [] }) {
   const [hiddenLayerIds, setHiddenLayerIds] =
     useState([]);
@@ -901,51 +982,20 @@ function LegendPanel({ activeLayers = [] }) {
 
   return (
     <>
-      <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5 border-b border-white/10">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-white/15 flex items-center justify-center shadow-lg border border-white/10">
-              <Info size={22} />
-            </div>
-
-            <div>
-              <h2 className="font-bold text-xl leading-none">
-                Legendas
-              </h2>
-
-              <p className="text-xs text-blue-200 mt-1">
-                Simbologia das camadas ativas
-              </p>
-            </div>
-          </div>
-
-          <div className="px-3 py-1.5 rounded-full bg-white/10 text-[12px] font-bold text-blue-100 border border-white/10">
-            {activeLayers.length}
-          </div>
-        </div>
-
-        <p className="text-xs text-blue-100">
-          As legendas são carregadas diretamente do GeoServer.
-        </p>
-      </div>
+      <PanelHeader
+        icon={<Info size={22} />}
+        title="Legendas"
+        subtitle="Simbologia e descrição das camadas ativas"
+        count={activeLayers.length}
+      />
 
       <div className="flex-1 overflow-y-auto bg-slate-50 p-4">
         {activeLayers.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-center">
-            <div>
-              <div className="h-16 w-16 rounded-3xl bg-blue-100 text-blue-700 flex items-center justify-center mx-auto">
-                <Layers size={30} />
-              </div>
-
-              <h3 className="font-bold text-gray-800 mt-4">
-                Nenhuma camada ativa
-              </h3>
-
-              <p className="text-sm text-gray-500 mt-2 max-w-xs">
-                Ative uma camada no painel de camadas para visualizar sua legenda aqui.
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            icon={<Layers size={30} />}
+            title="Nenhuma camada ativa"
+            text="Ative uma camada no painel de camadas para visualizar sua legenda aqui."
+          />
         ) : visibleLayers.length === 0 ? (
           <div className="rounded-2xl bg-white border border-slate-200 p-5 text-center">
             <p className="text-sm text-slate-500">
@@ -1096,6 +1146,363 @@ function LegendCard({ layer, onHide }) {
   );
 }
 
+function MeasurePanel({ mapToolsRef }) {
+  return (
+    <>
+      <PanelHeader
+        icon={<Ruler size={22} />}
+        title="Medição"
+        subtitle="Meça distâncias e áreas no mapa"
+      />
+
+      <div className="flex-1 overflow-y-auto bg-slate-50 p-5">
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() =>
+              mapToolsRef?.current?.measureLine?.()
+            }
+            className="
+              w-full
+              rounded-2xl
+              bg-white
+              border
+              border-slate-200
+              p-4
+              text-left
+              hover:border-blue-200
+              hover:bg-blue-50
+              transition
+              shadow-sm
+            "
+          >
+            <h3 className="font-black text-slate-800">
+              Medir distância
+            </h3>
+
+            <p className="text-sm text-slate-500 mt-1">
+              Clique no mapa para desenhar uma linha e calcular o comprimento.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              mapToolsRef?.current?.measureArea?.()
+            }
+            className="
+              w-full
+              rounded-2xl
+              bg-white
+              border
+              border-slate-200
+              p-4
+              text-left
+              hover:border-blue-200
+              hover:bg-blue-50
+              transition
+              shadow-sm
+            "
+          >
+            <h3 className="font-black text-slate-800">
+              Medir área
+            </h3>
+
+            <p className="text-sm text-slate-500 mt-1">
+              Desenhe um polígono para calcular a área aproximada.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              mapToolsRef?.current?.clearDrawings?.()
+            }
+            className="
+              w-full
+              rounded-2xl
+              bg-red-50
+              border
+              border-red-100
+              p-4
+              text-left
+              hover:bg-red-100
+              transition
+            "
+          >
+            <h3 className="font-black text-red-700">
+              Limpar medições
+            </h3>
+
+            <p className="text-sm text-red-500 mt-1">
+              Remove todas as linhas e áreas medidas no mapa.
+            </p>
+          </button>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() =>
+                mapToolsRef?.current?.zoomIn?.()
+              }
+              className="rounded-2xl bg-white border border-slate-200 p-4 font-bold text-slate-700 hover:bg-slate-50 transition flex items-center justify-center gap-2"
+            >
+              <ZoomIn size={18} />
+              Zoom +
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                mapToolsRef?.current?.zoomOut?.()
+              }
+              className="rounded-2xl bg-white border border-slate-200 p-4 font-bold text-slate-700 hover:bg-slate-50 transition flex items-center justify-center gap-2"
+            >
+              <ZoomOut size={18} />
+              Zoom -
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function BookmarksPanel({
+  favoriteLayers = [],
+  onToggleFavorite,
+  onToggleLayer,
+  isLayerActive,
+}) {
+  return (
+    <>
+      <PanelHeader
+        icon={<Bookmark size={22} />}
+        title="Marcadores"
+        subtitle="Camadas favoritas para acesso rápido"
+        count={favoriteLayers.length}
+      />
+
+      <div className="flex-1 overflow-y-auto bg-slate-50 p-4">
+        {favoriteLayers.length === 0 ? (
+          <EmptyState
+            icon={
+              <Star
+                size={30}
+                fill="currentColor"
+              />
+            }
+            title="Nenhuma camada marcada"
+            text="Use a estrela ao lado das camadas para salvá-las aqui."
+            color="amber"
+          />
+        ) : (
+          <div className="space-y-3">
+            {favoriteLayers.map((layer) => {
+              const active = isLayerActive(layer);
+
+              const category =
+                layer.subcategory?.category?.name ||
+                "Sem categoria";
+
+              const subcategory =
+                layer.subcategory?.name ||
+                "Sem subcategoria";
+
+              return (
+                <div
+                  key={layer.id}
+                  className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="font-black text-slate-800 text-sm truncate">
+                        {layer.name}
+                      </h3>
+
+                      <p className="text-xs text-slate-400 mt-1 truncate">
+                        {category} • {subcategory}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onToggleFavorite(layer.id)
+                      }
+                      className="h-8 w-8 rounded-xl bg-amber-50 text-amber-500 hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center shrink-0"
+                      title="Remover dos marcadores"
+                    >
+                      <Star
+                        size={16}
+                        fill="currentColor"
+                      />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onToggleLayer(layer)
+                    }
+                    className={`
+                      mt-4
+                      w-full
+                      rounded-xl
+                      px-4
+                      py-2.5
+                      text-sm
+                      font-bold
+                      transition
+                      ${
+                        active
+                          ? "bg-red-50 text-red-600 hover:bg-red-100"
+                          : "bg-blue-700 text-white hover:bg-blue-800"
+                      }
+                    `}
+                  >
+                    {active
+                      ? "Remover do mapa"
+                      : "Adicionar ao mapa"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function PrintPanel({ activeLayers = [] }) {
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <>
+      <PanelHeader
+        icon={<Printer size={22} />}
+        title="Impressão"
+        subtitle="Exportação e impressão do mapa"
+        count={activeLayers.length}
+      />
+
+      <div className="flex-1 overflow-y-auto bg-slate-50 p-5">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <h3 className="font-black text-slate-800">
+            Imprimir mapa atual
+          </h3>
+
+          <p className="text-sm text-slate-500 mt-2">
+            Imprime a visualização atual do mapa. Na janela de impressão, você pode salvar como PDF.
+          </p>
+
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="mt-5 w-full rounded-2xl bg-blue-700 text-white px-4 py-3 font-bold hover:bg-blue-800 transition flex items-center justify-center gap-2"
+          >
+            <FileText size={18} />
+            Imprimir / Salvar PDF
+          </button>
+        </div>
+
+        <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <h3 className="font-black text-slate-800">
+            Exportar imagem
+          </h3>
+
+          <p className="text-sm text-slate-500 mt-2">
+            A exportação em PNG e JPEG será configurada na próxima etapa, capturando a área do mapa em escala.
+          </p>
+
+          <div className="grid grid-cols-2 gap-3 mt-5">
+            <button
+              type="button"
+              disabled
+              className="rounded-2xl bg-slate-100 text-slate-400 px-4 py-3 font-bold cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <ImageIcon size={17} />
+              PNG
+            </button>
+
+            <button
+              type="button"
+              disabled
+              className="rounded-2xl bg-slate-100 text-slate-400 px-4 py-3 font-bold cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <ImageIcon size={17} />
+              JPEG
+            </button>
+          </div>
+        </div>
+
+        {activeLayers.length > 0 && (
+          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <p className="text-xs font-black text-amber-800 uppercase">
+              Camadas no mapa
+            </p>
+
+            <div className="mt-3 space-y-2">
+              {activeLayers.map((layer) => (
+                <div
+                  key={layer.id}
+                  className="text-sm text-amber-900 font-medium"
+                >
+                  • {layer.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  text,
+  color = "blue",
+}) {
+  const colorClasses =
+    color === "amber"
+      ? "bg-amber-100 text-amber-600"
+      : "bg-blue-100 text-blue-700";
+
+  return (
+    <div className="h-full flex items-center justify-center text-center">
+      <div>
+        <div
+          className={`
+            h-16
+            w-16
+            rounded-3xl
+            flex
+            items-center
+            justify-center
+            mx-auto
+            ${colorClasses}
+          `}
+        >
+          {icon}
+        </div>
+
+        <h3 className="font-bold text-gray-800 mt-4">
+          {title}
+        </h3>
+
+        <p className="text-sm text-gray-500 mt-2 max-w-xs">
+          {text}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function getLayerDescription(layer) {
   return (
     layer.description ||
@@ -1139,12 +1546,6 @@ function buildLayerPreviewUrl(layer) {
   params.set("transparent", "true");
   params.set("format", "image/png");
   params.set("version", "1.1.1");
-
-  /*
-   * BBOX aproximado da área urbana de Sobral.
-   * Isso gera uma mini imagem da camada usando GetMap,
-   * igual o mapa faz, só que em tamanho pequeno.
-   */
   params.set("srs", "EPSG:4326");
   params.set("bbox", "-40.45,-3.78,-40.25,-3.60");
   params.set("width", "360");

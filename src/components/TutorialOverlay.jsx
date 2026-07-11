@@ -10,55 +10,114 @@ export default function TutorialOverlay({
   open,
   onClose,
 }) {
+  const sidebarStepAdjustments = {
+    placement: "right",
+    disableScroll: true,
+    spotlightPadding: 3,
+    spotlightOffsetX: -8,
+    spotlightOffsetY: 0,
+    cardOffsetX: -8,
+  };
+
   const steps = useMemo(
     () => [
       {
         selector: "[data-tour='sidebar']",
         title: "Menu lateral",
-        text: "Aqui você encontra as camadas do mapa, a busca de locais, as legendas, ferramentas de impressão, tela cheia e outras funcionalidades.",
+        text: "Aqui ficam as principais ferramentas do mapa. Você pode acessar camadas, legendas, busca, medição, marcadores, impressão, limpar o mapa e ativar tela cheia.",
         placement: "right",
+        disableScroll: true,
+        spotlightPadding: 0,
+        spotlightOffsetX: -8,
+        cardOffsetX: -8,
       },
       {
         selector: "[data-tour='layers-button']",
         title: "Camadas",
         text: "Neste botão você acessa a lista de mapas temáticos disponíveis. Ao marcar uma camada, ela aparece sobre o mapa.",
-        placement: "right",
+        ...sidebarStepAdjustments,
       },
       {
         selector: "[data-tour='legend-button']",
         title: "Legendas",
-        text: "Aqui ficam as informações das camadas ativas, incluindo descrição, categoria e prévia visual quando disponível.",
-        placement: "right",
+        text: "Aqui ficam as informações das camadas ativas, incluindo descrição, categoria, subcategoria e prévia visual quando disponível.",
+        ...sidebarStepAdjustments,
       },
       {
         selector: "[data-tour='search-button']",
         title: "Busca de locais",
         text: "Use esta opção para pesquisar endereços, bairros, locais de interesse ou coordenadas no mapa.",
-        placement: "right",
+        ...sidebarStepAdjustments,
+      },
+      {
+        selector: "[data-tour='measure-button']",
+        title: "Medição",
+        text: "Nesta ferramenta você pode medir distâncias e áreas diretamente no mapa. É útil para calcular trechos, perímetros e áreas aproximadas.",
+        ...sidebarStepAdjustments,
+      },
+      {
+        selector: "[data-tour='bookmarks-button']",
+        title: "Marcadores",
+        text: "Aqui ficam as camadas favoritas. Você pode marcar camadas com estrela para acessá-las rapidamente depois.",
+        ...sidebarStepAdjustments,
+      },
+      {
+        selector: "[data-tour='print-button']",
+        title: "Impressão",
+        text: "Nesta área você poderá imprimir o mapa atual, salvar como PDF e, futuramente, exportar a área do mapa como PNG ou JPEG.",
+        ...sidebarStepAdjustments,
+      },
+      {
+        selector: "[data-tour='clear-button']",
+        title: "Limpar mapa",
+        text: "Este botão remove as camadas ativas e limpa desenhos ou medições feitas no mapa.",
+        ...sidebarStepAdjustments,
+      },
+      {
+        selector: "[data-tour='fullscreen-button']",
+        title: "Tela cheia",
+        text: "Use este botão para expandir o sistema em tela cheia e aproveitar melhor a visualização do mapa.",
+        ...sidebarStepAdjustments,
+      },
+      {
+        selector: "[data-tour='map-zoom-controls']",
+        title: "Controles de zoom",
+        text: "Estes botões permitem aproximar ou afastar o mapa rapidamente usando o zoom manual.",
+        placement: "left",
+        disableScroll: true,
+        spotlightPadding: 6,
+        spotlightOffsetX: 0,
+        cardOffsetX: -8,
       },
       {
         selector: "[data-tour='contact-button']",
         title: "Contato",
-        text: "Neste menu você pode entrar em contato, enviar dúvidas, sugestões ou relatar problemas encontrados no mapa.",
+        text: "Neste menu você pode enviar dúvidas, sugestões, solicitações ou relatar problemas encontrados no mapa.",
         placement: "bottom",
+        disableScroll: true,
       },
       {
         selector: "[data-tour='about-button']",
         title: "Sobre",
         text: "Aqui você acessa uma página com informações sobre a cidade e sobre o projeto Sobral em Mapas.",
         placement: "bottom",
+        disableScroll: true,
       },
       {
         selector: "[data-tour='login-area']",
         title: "Área do usuário",
         text: "Neste espaço ficam as opções de login, acesso administrativo e informações do usuário autenticado.",
         placement: "bottom-left",
+        disableScroll: true,
       },
       {
         selector: "[data-tour='chat-button']",
         title: "Chat",
         text: "O chat pode auxiliar o usuário com dúvidas rápidas, orientações e apoio durante o uso do sistema.",
         placement: "left",
+        disableScroll: true,
+        spotlightPadding: 8,
+        cardOffsetX: -8,
       },
     ],
     []
@@ -93,7 +152,10 @@ export default function TutorialOverlay({
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
     };
   }, [open, onClose, steps.length]);
 
@@ -110,11 +172,13 @@ export default function TutorialOverlay({
         return;
       }
 
-      element.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "center",
-      });
+      if (!step.disableScroll) {
+        element.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "center",
+        });
+      }
 
       timeoutId = window.setTimeout(() => {
         const rect = element.getBoundingClientRect();
@@ -127,7 +191,7 @@ export default function TutorialOverlay({
           right: rect.right,
           bottom: rect.bottom,
         });
-      }, 250);
+      }, 180);
     };
 
     updateTarget();
@@ -158,8 +222,15 @@ export default function TutorialOverlay({
     return null;
   }
 
-  const spotlightStyle = getSpotlightStyle(targetRect);
-  const cardStyle = getCardStyle(targetRect, step.placement);
+  const spotlightStyle = getSpotlightStyle(
+    targetRect,
+    step
+  );
+
+  const cardStyle = getCardStyle(
+    targetRect,
+    step
+  );
 
   const isFirst = currentStep === 0;
   const isLast = currentStep === steps.length - 1;
@@ -234,7 +305,7 @@ export default function TutorialOverlay({
             {step.text}
           </p>
 
-          <div className="flex items-center gap-1 mt-5">
+          <div className="flex items-center gap-1 mt-5 flex-wrap">
             {steps.map((_, index) => (
               <span
                 key={index}
@@ -303,7 +374,10 @@ export default function TutorialOverlay({
                 type="button"
                 onClick={() =>
                   setCurrentStep((previous) =>
-                    Math.min(previous + 1, steps.length - 1)
+                    Math.min(
+                      previous + 1,
+                      steps.length - 1
+                    )
                   )
                 }
                 className="
@@ -339,23 +413,31 @@ export default function TutorialOverlay({
   );
 }
 
-function getSpotlightStyle(rect) {
+function getSpotlightStyle(rect, step = {}) {
   if (!rect) return {};
 
-  const padding = 8;
+  const padding = step.spotlightPadding ?? 8;
+  const offsetX = step.spotlightOffsetX ?? 0;
+  const offsetY = step.spotlightOffsetY ?? 0;
 
   return {
-    top: Math.max(rect.top - padding, 8),
-    left: Math.max(rect.left - padding, 8),
+    top: Math.max(rect.top - padding + offsetY, 8),
+    left: Math.max(rect.left - padding + offsetX, 8),
     width: rect.width + padding * 2,
     height: rect.height + padding * 2,
   };
 }
 
-function getCardStyle(rect, placement = "right") {
+function getCardStyle(rect, step = {}) {
+  const placement = step.placement || "right";
+
   const cardWidth = 360;
-  const cardHeight = 260;
-  const margin = 18;
+  const cardHeight = 300;
+  const margin = 14;
+
+  const cardOffsetX = step.cardOffsetX ?? 0;
+  const cardOffsetY = step.cardOffsetY ?? 0;
+
   const windowWidth = window.innerWidth;
   const windowHeight = window.innerHeight;
 
@@ -375,6 +457,11 @@ function getCardStyle(rect, placement = "right") {
     top = rect.top;
   }
 
+  if (placement === "right") {
+    left = rect.right + margin;
+    top = rect.top;
+  }
+
   if (placement === "bottom") {
     left = rect.left;
     top = rect.bottom + margin;
@@ -384,6 +471,14 @@ function getCardStyle(rect, placement = "right") {
     left = rect.right - cardWidth;
     top = rect.bottom + margin;
   }
+
+  if (placement === "top") {
+    left = rect.left;
+    top = rect.top - cardHeight - margin;
+  }
+
+  left += cardOffsetX;
+  top += cardOffsetY;
 
   if (left + cardWidth > windowWidth - margin) {
     left = windowWidth - cardWidth - margin;

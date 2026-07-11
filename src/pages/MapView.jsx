@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
@@ -13,6 +13,14 @@ function MapView() {
 
   const [tutorialOpen, setTutorialOpen] =
     useState(false);
+
+  const [tutorialKey, setTutorialKey] =
+    useState(0);
+
+  const [sidebarOpenSignal, setSidebarOpenSignal] =
+    useState(0);
+
+  const mapToolsRef = useRef(null);
 
   const handleLayerToggle = (layer) => {
     setActiveLayers((prev) => {
@@ -38,11 +46,20 @@ function MapView() {
     setSearchLocation(location);
   };
 
+  const handleStartTutorial = () => {
+    setTutorialOpen(false);
+
+    setSidebarOpenSignal((previous) => previous + 1);
+    setTutorialKey((previous) => previous + 1);
+
+    window.setTimeout(() => {
+      setTutorialOpen(true);
+    }, 380);
+  };
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-gray-100">
-      <Header
-        onStartTutorial={() => setTutorialOpen(true)}
-      />
+      <Header onStartTutorial={handleStartTutorial} />
 
       <main className="pt-[72px] h-full">
         <div className="relative h-full">
@@ -51,19 +68,22 @@ function MapView() {
             onToggleLayer={handleLayerToggle}
             onClearMap={handleClearLayers}
             onSearchLocation={handleSearchLocation}
+            mapToolsRef={mapToolsRef}
+            forceOpenSignal={sidebarOpenSignal}
           />
 
           <Map
             activeLayers={activeLayers}
             searchLocation={searchLocation}
+            mapToolsRef={mapToolsRef}
           />
 
           <Chatbot />
-          
         </div>
       </main>
 
       <TutorialOverlay
+        key={tutorialKey}
         open={tutorialOpen}
         onClose={() => setTutorialOpen(false)}
       />
