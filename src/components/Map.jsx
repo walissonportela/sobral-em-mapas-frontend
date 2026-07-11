@@ -214,18 +214,25 @@ export default function Map({
 
         if (format === "pdf") {
           exportCanvasAsPdf(croppedCanvas);
-          return;
-        }
-
-        if (format === "jpeg") {
-          exportCanvasAsImage(
+        } else if (format === "jpeg") {
+          await exportCanvasAsImage(
             croppedCanvas,
             "jpeg"
           );
-          return;
+        } else {
+          await exportCanvasAsImage(
+            croppedCanvas,
+            "png"
+          );
         }
 
-        exportCanvasAsImage(croppedCanvas, "png");
+        dispatchPrintHistoryEvent({
+          format,
+          selection: printSelection,
+          activeLayers,
+          canvas: croppedCanvas,
+        });
+
       } catch (error) {
         console.error("Erro real ao exportar:", error);
 
@@ -247,13 +254,23 @@ export default function Map({
         setIsExporting(false);
       }
     },
-    [printFormat, printSelection]
+    [printFormat, printSelection, activeLayers]
   );
 
   const printTools = useMemo(
     () => ({
-      enablePrintSelection: (format = "pdf") => {
+      enablePrintSelection: (
+        format = "pdf",
+        savedSelection = null
+      ) => {
         setPrintFormat(format);
+
+        if (savedSelection) {
+          setPrintSelection(
+            normalizePrintSelection(savedSelection)
+          );
+        }
+
         setPrintMode(true);
       },
 
@@ -649,47 +666,58 @@ function getPolygonArea(layer) {
 }
 
 function exportCanvasAsImage(canvas, format) {
-  const isJpeg = format === "jpeg";
+  return new Promise((resolve, reject) => {
+    const isJpeg = format === "jpeg";
 
-  const outputCanvas =
-    document.createElement("canvas");
+    const outputCanvas =
+      document.createElement("canvas");
 
-  outputCanvas.width = canvas.width;
-  outputCanvas.height = canvas.height;
+    outputCanvas.width = canvas.width;
+    outputCanvas.height = canvas.height;
 
-  const context =
-    outputCanvas.getContext("2d");
+    const context =
+      outputCanvas.getContext("2d");
 
-  if (isJpeg) {
-    context.fillStyle = "#ffffff";
-    context.fillRect(
-      0,
-      0,
-      outputCanvas.width,
-      outputCanvas.height
-    );
-  }
-
-  context.drawImage(canvas, 0, 0);
-
-  const mimeType = isJpeg
-    ? "image/jpeg"
-    : "image/png";
-
-  const extension = isJpeg ? "jpg" : "png";
-
-  outputCanvas.toBlob(
-    (blob) => {
-      if (!blob) return;
-
-      downloadBlob(
-        blob,
-        `sobral-em-mapas.${extension}`
+    if (isJpeg) {
+      context.fillStyle = "#ffffff";
+      context.fillRect(
+        0,
+        0,
+        outputCanvas.width,
+        outputCanvas.height
       );
-    },
-    mimeType,
-    isJpeg ? 0.95 : undefined
-  );
+    }
+
+    context.drawImage(canvas, 0, 0);
+
+    const mimeType = isJpeg
+      ? "image/jpeg"
+      : "image/png";
+
+    const extension = isJpeg ? "jpg" : "png";
+
+    outputCanvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(
+            new Error(
+              "Não foi possível gerar a imagem."
+            )
+          );
+          return;
+        }
+
+        downloadBlob(
+          blob,
+          `sobral-em-mapas.${extension}`
+        );
+
+        resolve();
+      },
+      mimeType,
+      isJpeg ? 0.95 : undefined
+    );
+  });
 }
 
 function exportCanvasAsPdf(canvas) {
@@ -762,4 +790,91 @@ function downloadBlob(blob, filename) {
   window.setTimeout(() => {
     URL.revokeObjectURL(url);
   }, 500);
+}
+
+function normalizePrintSelection(selection) {
+  return {
+    x: Number(selection?.x) || 460,
+    y: Number(selection?.y) || 130,
+    width: Number(selection?.width) || 560,
+    height: Number(selection?.height) || 360,
+  };
+}
+
+function dispatchPrintHistoryEvent({
+  format,
+  selection,
+  activeLayers = [],
+  canvas,
+}) {
+  const imageDataUrl =
+    canvasToHistoryDataUrl(canvas);
+
+  const item = {
+    id:
+      typeof crypto !== "undefined" &&
+      crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`,
+
+    createdAt: new Date().toISOString(),
+
+    format,
+
+    selection: {
+      x: selection.x,
+      y: selection.y,
+      width: selection.width,
+      height: selection.height,
+    },
+
+    imageDataUrl,
+    imageMimeType: "image/jpeg",
+
+    outputWidth: canvas?.width || 0,
+    outputHeight: canvas?.height || 0,
+
+    layers: activeLayers.map((layer) => ({
+      id: layer.id,
+      name: layer.name,
+    })),
+  };
+
+  window.dispatchEvent(
+    new CustomEvent("sobral-map-print-exported", {
+      detail: item,
+    })
+  );
+}
+
+function canvasToHistoryDataUrl(canvas) {
+  if (!canvas) {
+    return "";
+  }
+
+  const outputCanvas =
+    document.createElement("canvas");
+
+  outputCanvas.width = canvas.width;
+  outputCanvas.height = canvas.height;
+
+  const context =
+    outputCanvas.getContext("2d");
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(
+    0,
+    0,
+    outputCanvas.width,
+    outputCanvas.height
+  );
+
+  context.drawImage(canvas, 0, 0);
+
+  return outputCanvas.toDataURL(
+    "image/jpeg",
+    0.82
+  );
 }

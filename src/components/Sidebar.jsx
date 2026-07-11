@@ -36,6 +36,8 @@ import {
 import api from "../services/api";
 import SearchPanel from "./SearchPanel";
 
+import { jsPDF } from "jspdf";
+
 const API_BASE_URL = "http://localhost:8080/api";
 
 export default function Sidebar({
@@ -1384,7 +1386,53 @@ function PrintPanel({
   mapToolsRef,
   onCollapseSidebar,
 }) {
-  const [format, setFormat] = useState("pdf");
+  const [historyStorageKey] = useState(() =>
+    getPrintHistoryStorageKey()
+  );
+
+  const [printHistory, setPrintHistory] = useState(
+    () => loadPrintHistory(historyStorageKey)
+  );
+
+  useEffect(() => {
+    localStorage.setItem(
+      historyStorageKey,
+      JSON.stringify(printHistory)
+    );
+  }, [historyStorageKey, printHistory]);
+
+  useEffect(() => {
+    const handlePrintExported = (event) => {
+      const item = event.detail;
+
+      if (!item?.selection || !item?.imageDataUrl) {
+        return;
+      }
+
+      setPrintHistory((previous) => {
+        const next = [
+          item,
+          ...previous.filter(
+            (oldItem) => oldItem.id !== item.id
+          ),
+        ];
+
+        return next.slice(0, 8);
+      });
+    };
+
+    window.addEventListener(
+      "sobral-map-print-exported",
+      handlePrintExported
+    );
+
+    return () => {
+      window.removeEventListener(
+        "sobral-map-print-exported",
+        handlePrintExported
+      );
+    };
+  }, []);
 
   const getPrintTools = () => {
     const tools = mapToolsRef?.current;
@@ -1400,14 +1448,6 @@ function PrintPanel({
     return tools;
   };
 
-  const handleChangeFormat = (nextFormat) => {
-    setFormat(nextFormat);
-
-    mapToolsRef?.current?.setPrintFormat?.(
-      nextFormat
-    );
-  };
-
   const handleActivateSelection = () => {
     const tools = getPrintTools();
 
@@ -1421,10 +1461,37 @@ function PrintPanel({
       return;
     }
 
-    tools.setPrintFormat?.(format);
-    tools.enablePrintSelection(format);
+    tools.enablePrintSelection("pdf");
 
     onCollapseSidebar?.();
+  };
+
+  const handleExportHistoryItem = async (
+    item,
+    format = "pdf"
+  ) => {
+    try {
+      await exportHistoryImage(item, format);
+    } catch (error) {
+      console.error(
+        "Erro ao exportar item do histórico:",
+        error
+      );
+
+      alert(
+        "Não foi possível exportar este item do histórico. Itens antigos podem não ter a imagem salva."
+      );
+    }
+  };
+
+  const handleDeleteHistoryItem = (itemId) => {
+    setPrintHistory((previous) =>
+      previous.filter((item) => item.id !== itemId)
+    );
+  };
+
+  const handleClearHistory = () => {
+    setPrintHistory([]);
   };
 
   const handleCancelSelection = () => {
@@ -1436,47 +1503,19 @@ function PrintPanel({
       <PanelHeader
         icon={<Printer size={22} />}
         title="Impressão"
-        subtitle="Exportação e impressão do mapa"
-        count={activeLayers.length}
+        subtitle="Exportação e histórico de recortes"
+        count={printHistory.length}
       />
 
       <div className="flex-1 overflow-y-auto bg-slate-50 p-5">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
           <h3 className="font-black text-slate-800">
-            Área de impressão
+            Nova área de impressão
           </h3>
 
           <p className="text-sm text-slate-500 mt-2">
-            Ative o retângulo de impressão no mapa. Depois mova, redimensione e exporte diretamente pelo card que aparecerá junto da área selecionada.
+            Ative o retângulo no mapa. Depois mova, redimensione e escolha o formato diretamente no card de exportação.
           </p>
-
-          <div className="grid grid-cols-3 gap-2 mt-5">
-            {["pdf", "png", "jpeg"].map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() =>
-                  handleChangeFormat(item)
-                }
-                className={`
-                  rounded-xl
-                  px-3
-                  py-2
-                  text-xs
-                  font-black
-                  uppercase
-                  transition
-                  ${
-                    format === item
-                      ? "bg-blue-700 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }
-                `}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
 
           <button
             type="button"
@@ -1523,14 +1562,194 @@ function PrintPanel({
             "
           >
             <X size={18} />
-            Cancelar área de impressão
+            Cancelar área ativa
           </button>
         </div>
 
+        <div className="mt-5">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="font-black text-slate-800">
+                Histórico de impressões
+              </h3>
+
+              <p className="text-xs text-slate-500 mt-0.5">
+                Recortes exportados nesta conta.
+              </p>
+            </div>
+
+            {printHistory.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearHistory}
+                className="
+                  h-9
+                  w-9
+                  rounded-xl
+                  bg-red-50
+                  text-red-600
+                  hover:bg-red-100
+                  transition
+                  flex
+                  items-center
+                  justify-center
+                  shrink-0
+                "
+                title="Limpar histórico"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
+
+          {printHistory.length === 0 ? (
+            <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-5 text-center">
+              <div className="h-14 w-14 rounded-2xl bg-blue-50 text-blue-700 mx-auto flex items-center justify-center">
+                <ImageIcon size={24} />
+              </div>
+
+              <h4 className="font-bold text-slate-700 mt-3">
+                Nenhuma impressão ainda
+              </h4>
+
+              <p className="text-sm text-slate-500 mt-1">
+                Quando você exportar uma área, ela aparecerá aqui para reutilização.
+              </p>
+            </div>
+          ) : (
+            <div className="max-h-[360px] overflow-y-auto pr-1 space-y-3">
+              {printHistory.map((item, index) => (
+                <div
+                  key={item.id}
+                  className="
+                    bg-white
+                    border
+                    border-slate-200
+                    rounded-2xl
+                    p-4
+                    shadow-sm
+                  "
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="font-black text-sm text-slate-800">
+                        Impressão #{printHistory.length - index}
+                      </h4>
+
+                      <p className="text-xs text-slate-500 mt-1">
+                        {formatPrintDate(item.createdAt)}
+                      </p>
+
+                      <p className="text-xs text-slate-400 mt-1">
+                        Área:{" "}
+                        {Math.round(
+                          item.selection?.width || 0
+                        )}{" "}
+                        ×{" "}
+                        {Math.round(
+                          item.selection?.height || 0
+                        )}{" "}
+                        px
+                      </p>
+
+                      <p className="text-xs text-slate-400 mt-1">
+                        Último formato:{" "}
+                        <span className="font-bold uppercase">
+                          {item.format || "pdf"}
+                        </span>
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDeleteHistoryItem(item.id)
+                      }
+                      className="
+                        h-8
+                        w-8
+                        rounded-xl
+                        bg-slate-100
+                        text-slate-400
+                        hover:bg-red-50
+                        hover:text-red-600
+                        transition
+                        flex
+                        items-center
+                        justify-center
+                        shrink-0
+                      "
+                      title="Remover do histórico"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  {item.imageDataUrl && (
+                    <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
+                      <img
+                        src={item.imageDataUrl}
+                        alt="Prévia da impressão"
+                        className="w-full h-32 object-cover"
+                      />
+                    </div>
+                  )}
+
+                  {item.layers?.length > 0 && (
+                    <div className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">
+                      <p className="text-[11px] font-black text-amber-800 uppercase">
+                        Camadas usadas
+                      </p>
+
+                      <p className="text-xs text-amber-900 mt-1 truncate">
+                        {item.layers
+                          .map((layer) => layer.name)
+                          .join(", ")}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-2 mt-4">
+                    {["pdf", "png", "jpeg"].map(
+                      (formatOption) => (
+                        <button
+                          key={formatOption}
+                          type="button"
+                          onClick={() =>
+                              handleExportHistoryItem(
+                                item,
+                                formatOption
+                              )
+                            }
+                          className="
+                            rounded-xl
+                            bg-slate-100
+                            text-slate-600
+                            hover:bg-blue-700
+                            hover:text-white
+                            px-2
+                            py-2
+                            text-xs
+                            font-black
+                            uppercase
+                            transition
+                          "
+                        >
+                          {formatOption}
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {activeLayers.length > 0 && (
-          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <div className="mt-5 bg-amber-50 border border-amber-200 rounded-2xl p-4">
             <p className="text-xs font-black text-amber-800 uppercase">
-              Camadas no mapa
+              Camadas no mapa agora
             </p>
 
             <div className="mt-3 space-y-2">
@@ -1654,4 +1873,286 @@ function buildLayerPreviewUrl(layer) {
   }
 
   return `${API_BASE_URL}/proxy-wms?${params.toString()}`;
+}
+
+function getPrintHistoryStorageKey() {
+  const userId = getCurrentUserStorageId();
+
+  return `sobral_map_print_history_${userId}`;
+}
+
+function getCurrentUserStorageId() {
+  const possibleKeys = [
+    "admin_user",
+    "sobral_user",
+    "auth_user",
+    "user",
+    "current_user",
+  ];
+
+  for (const key of possibleKeys) {
+    try {
+      const raw = localStorage.getItem(key);
+
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+
+      const user =
+        parsed?.user ||
+        parsed?.data?.user ||
+        parsed;
+
+      const identifier =
+        user?.id ||
+        user?.email ||
+        user?.login ||
+        user?.name;
+
+      if (identifier) {
+        return String(identifier);
+      }
+    } catch {
+      // ignora registros inválidos
+    }
+  }
+
+  const token =
+    localStorage.getItem("admin_token") ||
+    localStorage.getItem("token");
+
+  if (token) {
+    return `token_${token.slice(0, 12)}`;
+  }
+
+  return "guest";
+}
+
+function loadPrintHistory(storageKey) {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(storageKey) || "[]"
+    );
+
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatPrintDate(value) {
+  if (!value) {
+    return "Data não informada";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return "Data inválida";
+  }
+}
+
+async function exportHistoryImage(item, format) {
+  if (!item?.imageDataUrl) {
+    throw new Error(
+      "Imagem não encontrada no histórico."
+    );
+  }
+
+  const image = await loadImageFromDataUrl(
+    item.imageDataUrl
+  );
+
+  const canvas = document.createElement("canvas");
+
+  canvas.width =
+    image.naturalWidth ||
+    item.outputWidth ||
+    1000;
+
+  canvas.height =
+    image.naturalHeight ||
+    item.outputHeight ||
+    700;
+
+  const context = canvas.getContext("2d");
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  context.drawImage(
+    image,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  const filename = getHistoryFilename(item);
+
+  if (format === "pdf") {
+    exportHistoryCanvasAsPdf(canvas, filename);
+    return;
+  }
+
+  const mimeType =
+    format === "jpeg"
+      ? "image/jpeg"
+      : "image/png";
+
+  const extension =
+    format === "jpeg" ? "jpg" : "png";
+
+  const blob = await canvasToBlob(
+    canvas,
+    mimeType,
+    format === "jpeg" ? 0.95 : undefined
+  );
+
+  downloadBlob(
+    blob,
+    `${filename}.${extension}`
+  );
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => resolve(image);
+
+    image.onerror = () =>
+      reject(
+        new Error(
+          "Não foi possível carregar a imagem do histórico."
+        )
+      );
+
+    image.src = dataUrl;
+  });
+}
+
+function canvasToBlob(
+  canvas,
+  mimeType,
+  quality
+) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(
+            new Error(
+              "Não foi possível gerar o arquivo."
+            )
+          );
+          return;
+        }
+
+        resolve(blob);
+      },
+      mimeType,
+      quality
+    );
+  });
+}
+
+function exportHistoryCanvasAsPdf(
+  canvas,
+  filename
+) {
+  const imageData = canvas.toDataURL(
+    "image/jpeg",
+    0.95
+  );
+
+  const orientation =
+    canvas.width >= canvas.height
+      ? "landscape"
+      : "portrait";
+
+  const pdf = new jsPDF({
+    orientation,
+    unit: "mm",
+    format: "a4",
+  });
+
+  const pageWidth =
+    pdf.internal.pageSize.getWidth();
+
+  const pageHeight =
+    pdf.internal.pageSize.getHeight();
+
+  const margin = 10;
+
+  const maxWidth = pageWidth - margin * 2;
+  const maxHeight = pageHeight - margin * 2;
+
+  const imageRatio =
+    canvas.width / canvas.height;
+
+  let imageWidth = maxWidth;
+  let imageHeight = imageWidth / imageRatio;
+
+  if (imageHeight > maxHeight) {
+    imageHeight = maxHeight;
+    imageWidth = imageHeight * imageRatio;
+  }
+
+  const x = (pageWidth - imageWidth) / 2;
+  const y = (pageHeight - imageHeight) / 2;
+
+  pdf.addImage(
+    imageData,
+    "JPEG",
+    x,
+    y,
+    imageWidth,
+    imageHeight
+  );
+
+  pdf.save(`${filename}.pdf`);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  link.style.display = "none";
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 500);
+}
+
+function getHistoryFilename(item) {
+  const date = item?.createdAt
+    ? new Date(item.createdAt)
+    : new Date();
+
+  const datePart = date
+    .toISOString()
+    .slice(0, 16)
+    .replace("T", "-")
+    .replace(":", "-");
+
+  return `sobral-em-mapas-${datePart}`;
 }
