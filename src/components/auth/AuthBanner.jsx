@@ -5,6 +5,8 @@ const AuthBanner = () => {
   return (
     <div
       className="
+        h-full
+        min-h-full
         bg-gradient-to-br
         from-blue-700
         via-blue-800
@@ -19,17 +21,17 @@ const AuthBanner = () => {
       <div>
         <div className="flex items-center gap-4 mb-8">
           <img
-            src="/Logo_Sobral.png"
+            src="/images/Logo_Sobral.png"
             alt="Sobral"
-            className="h-20"
+            className="h-20 w-auto object-contain shrink-0"
           />
 
-          <div>
+          <div className="min-w-0">
             <h3 className="font-bold text-xl">
               Prefeitura de Sobral
             </h3>
 
-            <p className="text-blue-200 text-sm">
+            <p className="text-blue-200 text-sm leading-relaxed">
               Sistema de Informações Geográficas
             </p>
           </div>
@@ -42,20 +44,19 @@ const AuthBanner = () => {
           </h2>
         </div>
 
-        <h1 className="text-5xl font-black mb-4">
+        <h1 className="text-5xl font-black mb-4 leading-tight">
           Sobral em Mapas
         </h1>
 
         <p className="text-blue-100 leading-relaxed">
-          Faça login para acessar recursos
-          exclusivos da plataforma.
+          Faça login para acessar recursos exclusivos da plataforma.
+          Cadastre-se agora para aproveitar ao máximo as funcionalidades do sistema.
         </p>
       </div>
 
-      <div className="bg-white/10 rounded-2xl p-5">
-        <p className="text-sm text-blue-100">
-          Usuários administrativos possuem
-          acesso a ferramentas avançadas de
+      <div className="bg-white/10 rounded-2xl p-5 mt-10">
+        <p className="text-sm text-blue-100 leading-relaxed">
+          Usuários administrativos possuem acesso a ferramentas avançadas de
           gestão de mapas e camadas.
         </p>
       </div>
