@@ -26,8 +26,12 @@ import "leaflet/dist/leaflet.css";
 
 import { getAvailableWmsLayers } from "../../services/layerService";
 
-const PROXY_WMS_URL =
-  "http://localhost:8080/api/proxy-wms";
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:8080/api"
+).replace(/\/$/, "");
+
+const PROXY_WMS_URL = `${API_BASE_URL}/proxy-wms`;
 
 const SOBRAL_CENTER = [-3.6892, -40.3489];
 
@@ -986,13 +990,12 @@ function PreviewMap({
 
       <WMSTileLayer
         url={PROXY_WMS_URL}
-        params={{
-          layers: config.layerName,
-          transparent: true,
-          format: "image/png",
-          version: config.version || "1.1.1",
-          wms_link_id: config.wmsLinkId || "",
-        }}
+        layers={config.layerName}
+        transparent={true}
+        format="image/png"
+        version={config.version || "1.1.1"}
+        wms_link_id={config.wmsLinkId || ""}
+        crossOrigin="anonymous"
         eventHandlers={{
           load: onLoaded,
           tileerror: onError,
