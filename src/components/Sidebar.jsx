@@ -721,7 +721,11 @@ export default function Sidebar({
         )}
 
         {activePanel === "print" && (
-          <PrintPanel activeLayers={activeLayers} />
+          <PrintPanel
+            activeLayers={activeLayers}
+            mapToolsRef={mapToolsRef}
+            onCollapseSidebar={() => setIsOpen(false)}
+          />
         )}
       </aside>
 
@@ -1375,9 +1379,56 @@ function BookmarksPanel({
   );
 }
 
-function PrintPanel({ activeLayers = [] }) {
-  const handlePrint = () => {
-    window.print();
+function PrintPanel({
+  activeLayers = [],
+  mapToolsRef,
+  onCollapseSidebar,
+}) {
+  const [format, setFormat] = useState("pdf");
+
+  const getPrintTools = () => {
+    const tools = mapToolsRef?.current;
+
+    if (!tools) {
+      alert(
+        "O mapa ainda não terminou de carregar. Aguarde alguns segundos e tente novamente."
+      );
+
+      return null;
+    }
+
+    return tools;
+  };
+
+  const handleChangeFormat = (nextFormat) => {
+    setFormat(nextFormat);
+
+    mapToolsRef?.current?.setPrintFormat?.(
+      nextFormat
+    );
+  };
+
+  const handleActivateSelection = () => {
+    const tools = getPrintTools();
+
+    if (!tools) return;
+
+    if (!tools.enablePrintSelection) {
+      alert(
+        "A ferramenta de impressão ainda não foi registrada no mapa."
+      );
+
+      return;
+    }
+
+    tools.setPrintFormat?.(format);
+    tools.enablePrintSelection(format);
+
+    onCollapseSidebar?.();
+  };
+
+  const handleCancelSelection = () => {
+    mapToolsRef?.current?.disablePrintSelection?.();
   };
 
   return (
@@ -1392,51 +1443,88 @@ function PrintPanel({ activeLayers = [] }) {
       <div className="flex-1 overflow-y-auto bg-slate-50 p-5">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
           <h3 className="font-black text-slate-800">
-            Imprimir mapa atual
+            Área de impressão
           </h3>
 
           <p className="text-sm text-slate-500 mt-2">
-            Imprime a visualização atual do mapa. Na janela de impressão, você pode salvar como PDF.
+            Ative o retângulo de impressão no mapa. Depois mova, redimensione e exporte diretamente pelo card que aparecerá junto da área selecionada.
           </p>
+
+          <div className="grid grid-cols-3 gap-2 mt-5">
+            {["pdf", "png", "jpeg"].map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() =>
+                  handleChangeFormat(item)
+                }
+                className={`
+                  rounded-xl
+                  px-3
+                  py-2
+                  text-xs
+                  font-black
+                  uppercase
+                  transition
+                  ${
+                    format === item
+                      ? "bg-blue-700 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }
+                `}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
 
           <button
             type="button"
-            onClick={handlePrint}
-            className="mt-5 w-full rounded-2xl bg-blue-700 text-white px-4 py-3 font-bold hover:bg-blue-800 transition flex items-center justify-center gap-2"
+            onClick={handleActivateSelection}
+            className="
+              mt-5
+              w-full
+              rounded-2xl
+              bg-blue-700
+              text-white
+              px-4
+              py-3
+              font-bold
+              hover:bg-blue-800
+              transition
+              flex
+              items-center
+              justify-center
+              gap-2
+            "
           >
             <FileText size={18} />
-            Imprimir / Salvar PDF
+            Ativar área de impressão
           </button>
-        </div>
 
-        <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <h3 className="font-black text-slate-800">
-            Exportar imagem
-          </h3>
-
-          <p className="text-sm text-slate-500 mt-2">
-            A exportação em PNG e JPEG será configurada na próxima etapa, capturando a área do mapa em escala.
-          </p>
-
-          <div className="grid grid-cols-2 gap-3 mt-5">
-            <button
-              type="button"
-              disabled
-              className="rounded-2xl bg-slate-100 text-slate-400 px-4 py-3 font-bold cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <ImageIcon size={17} />
-              PNG
-            </button>
-
-            <button
-              type="button"
-              disabled
-              className="rounded-2xl bg-slate-100 text-slate-400 px-4 py-3 font-bold cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <ImageIcon size={17} />
-              JPEG
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleCancelSelection}
+            className="
+              mt-3
+              w-full
+              rounded-2xl
+              bg-slate-100
+              text-slate-600
+              px-4
+              py-3
+              font-bold
+              hover:bg-slate-200
+              transition
+              flex
+              items-center
+              justify-center
+              gap-2
+            "
+          >
+            <X size={18} />
+            Cancelar área de impressão
+          </button>
         </div>
 
         {activeLayers.length > 0 && (
