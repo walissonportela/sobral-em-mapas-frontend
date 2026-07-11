@@ -56,29 +56,21 @@ export default function Sidebar({
   const [activePanel, setActivePanel] =
     useState("layers");
 
-  const [favoriteLayerIds, setFavoriteLayerIds] =
-    useState(() => {
-      try {
-        const saved = JSON.parse(
-          localStorage.getItem(
-            "sobral_map_favorite_layers"
-          ) || "[]"
-        );
+  const [favoriteStorageKey] = useState(() =>
+    getFavoriteLayersStorageKey()
+  );
 
-        return Array.isArray(saved)
-          ? saved.map(String)
-          : [];
-      } catch {
-        return [];
-      }
-    });
+  const [favoriteLayerIds, setFavoriteLayerIds] =
+    useState(() =>
+      loadFavoriteLayerIds(favoriteStorageKey)
+    );
 
   useEffect(() => {
     localStorage.setItem(
-      "sobral_map_favorite_layers",
+      favoriteStorageKey,
       JSON.stringify(favoriteLayerIds)
     );
-  }, [favoriteLayerIds]);
+  }, [favoriteStorageKey, favoriteLayerIds]);
 
   useEffect(() => {
     if (forceOpenSignal > 0) {
@@ -2155,4 +2147,24 @@ function getHistoryFilename(item) {
     .replace(":", "-");
 
   return `sobral-em-mapas-${datePart}`;
+}
+
+function getFavoriteLayersStorageKey() {
+  const userId = getCurrentUserStorageId();
+
+  return `sobral_map_favorite_layers_${userId}`;
+}
+
+function loadFavoriteLayerIds(storageKey) {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(storageKey) || "[]"
+    );
+
+    return Array.isArray(saved)
+      ? saved.map(String)
+      : [];
+  } catch {
+    return [];
+  }
 }

@@ -15,6 +15,7 @@ import {
   Map as MapIcon,
   LogOut,
   ChevronDown,
+  UserCircle,
 } from "lucide-react";
 
 import LoginModal from "./auth/LoginModal";
@@ -112,7 +113,7 @@ export default function Header({
             "
           >
             <img
-              src="/Logo_Sobral.png"
+              src="/images/Logo_Sobral.png"
               alt="Prefeitura de Sobral"
               className="
                 h-12
@@ -302,11 +303,46 @@ export default function Header({
                     </p>
                   </div>
 
-                  <div className="p-2">
+                  <div className="p-2 space-y-1">
+                    <Link
+                      to="/minha-conta"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="
+                        w-full
+                        flex
+                        items-center
+                        gap-3
+                        px-3
+                        py-2.5
+                        text-blue-700
+                        hover:bg-blue-50
+                        rounded-xl
+                        transition
+                        font-medium
+                        text-sm
+                      "
+                    >
+                      <UserCircle size={18} />
+                      Minha conta
+                    </Link>
+
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-xl transition font-medium text-sm"
+                      className="
+                        w-full
+                        flex
+                        items-center
+                        gap-3
+                        px-3
+                        py-2.5
+                        text-red-600
+                        hover:bg-red-50
+                        rounded-xl
+                        transition
+                        font-medium
+                        text-sm
+                      "
                     >
                       <LogOut size={18} />
                       Sair do Sistema

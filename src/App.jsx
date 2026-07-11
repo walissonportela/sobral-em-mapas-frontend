@@ -7,6 +7,7 @@ import {
 
 import MapView from "./pages/MapView";
 import About from "./pages/About";
+import Profile from "./pages/Profile";
 
 import Dashboard from "./pages/admin/Dashboard";
 import Users from "./pages/admin/Users";
@@ -40,6 +41,11 @@ function App() {
         <Route
           path="/sobre"
           element={<About />}
+        />
+
+        {/* Página do perfil */}
+        <Route path="/minha-conta" element={
+          <Profile />} 
         />
 
         {/* Redirecionamento inicial do painel */}
