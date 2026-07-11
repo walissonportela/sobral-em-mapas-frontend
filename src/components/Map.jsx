@@ -442,7 +442,9 @@ function MapToolsBridge({
       }
 
       drawLayerRef.current?.addLayer(layer);
+
       activeDrawerRef.current = null;
+      map.doubleClickZoom.enable();
     };
 
     map.on(
@@ -463,6 +465,8 @@ function MapToolsBridge({
       if (activeDrawerRef.current) {
         activeDrawerRef.current.disable();
       }
+
+      map.doubleClickZoom.disable();
 
       activeDrawerRef.current = drawer;
       drawer.enable();
@@ -488,6 +492,8 @@ function MapToolsBridge({
           activeDrawerRef.current.disable();
           activeDrawerRef.current = null;
         }
+
+        map.doubleClickZoom.enable();
       },
 
       measureLine: () => {
@@ -505,22 +511,26 @@ function MapToolsBridge({
       },
 
       measureArea: () => {
+        configureLeafletDrawPtBr();
+
         const drawer = new L.Draw.Polygon(map, {
           shapeOptions: {
             color: "#2563eb",
             weight: 3,
+            fillColor: "#2563eb",
             fillOpacity: 0.18,
           },
-          allowIntersection: false,
-          showArea: true,
+
+          allowIntersection: true,
+          showArea: false,
+
           metric: true,
           feet: false,
           nautic: false,
-          drawError: {
-            color: "#ef4444",
-            message:
-              "O polígono não pode cruzar ele mesmo.",
-          },
+
+          guidelineDistance: 12,
+          zIndexOffset: 2000,
+          repeatMode: false,
         });
 
         startDrawer(drawer);
@@ -877,4 +887,42 @@ function canvasToHistoryDataUrl(canvas) {
     "image/jpeg",
     0.82
   );
+}
+
+function configureLeafletDrawPtBr() {
+  if (!L.drawLocal) return;
+
+  L.drawLocal.draw.toolbar.actions.title =
+    "Cancelar desenho";
+  L.drawLocal.draw.toolbar.actions.text =
+    "Cancelar";
+
+  L.drawLocal.draw.toolbar.finish.title =
+    "Finalizar desenho";
+  L.drawLocal.draw.toolbar.finish.text =
+    "Finalizar";
+
+  L.drawLocal.draw.toolbar.undo.title =
+    "Remover último ponto";
+  L.drawLocal.draw.toolbar.undo.text =
+    "Remover último ponto";
+
+  L.drawLocal.draw.toolbar.buttons.polyline =
+    "Medir distância";
+  L.drawLocal.draw.toolbar.buttons.polygon =
+    "Medir área";
+
+  L.drawLocal.draw.handlers.polyline.tooltip.start =
+    "Clique no mapa para iniciar a medição.";
+  L.drawLocal.draw.handlers.polyline.tooltip.cont =
+    "Clique para continuar a linha.";
+  L.drawLocal.draw.handlers.polyline.tooltip.end =
+    "Clique no último ponto para finalizar.";
+
+  L.drawLocal.draw.handlers.polygon.tooltip.start =
+    "Clique no mapa para iniciar a área.";
+  L.drawLocal.draw.handlers.polygon.tooltip.cont =
+    "Clique para adicionar mais pontos.";
+  L.drawLocal.draw.handlers.polygon.tooltip.end =
+    "Clique no primeiro ponto para fechar a área.";
 }
