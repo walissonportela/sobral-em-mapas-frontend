@@ -25,11 +25,16 @@ import {
 
 import PrintSelectionOverlay from "./PrintSelectionOverlay";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:8080/api";
+
 export default function Map({
   activeLayers = [],
   searchLocation,
   mapToolsRef,
 }) {
+
   const [sobralGeoJson, setSobralGeoJson] =
     useState(null);
 
@@ -315,26 +320,22 @@ export default function Map({
         />
 
         {activeLayers.map((layer) => {
-          const wmsLink =
-            layer.wms_link ||
-            layer.wmsLink ||
-            null;
+        
 
           return (
             <WMSTileLayer
               key={layer.id}
-              url="http://localhost:8080/api/proxy-wms"
+              url={`${API_BASE_URL}/proxy-wms`}
+              layers={layer.layer_name}
+              transparent={true}
+              format="image/png"
+              version="1.1.1"
               crossOrigin="anonymous"
-              params={{
-                layers: layer.layer_name,
-                transparent: true,
-                format: "image/png",
-                version: wmsLink?.version || "1.1.1",
-                wms_link_id:
-                  layer.wms_link_id ||
-                  wmsLink?.id ||
-                  "",
-              }}
+              wms_link_id={
+                layer.wms_link_id ||
+                layer.wmsLink?.id ||
+                ""
+              }
             />
           );
         })}

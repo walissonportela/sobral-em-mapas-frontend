@@ -19,7 +19,7 @@ export default function AuthLeftPanel() {
       <div>
         <div className="flex items-center gap-4 mb-8">
           <img
-            src="/Logo_Sobral.png"
+            src="/images/Logo_Sobral.png"
             alt="Sobral"
             className="h-20"
           />
