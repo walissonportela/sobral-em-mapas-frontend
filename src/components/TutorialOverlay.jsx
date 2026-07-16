@@ -13,271 +13,240 @@ import {
   MousePointer2,
 } from "lucide-react";
 
-const sidebarStepAdjustments = {
-  placement: "right",
-  disableScroll: true,
-  spotlightPadding: 3,
-  spotlightOffsetX: -8,
-  spotlightOffsetY: 0,
-  cardOffsetX: -8,
-  cardOffsetY: 0,
-};
-
 export default function TutorialOverlay({
   open,
   onClose,
 }) {
-  const steps = useMemo(
-    () => [
+  const [currentStep, setCurrentStep] = useState(0);
+  const [targetRect, setTargetRect] = useState(null);
+
+  // Calcula os passos e configurações visual dependendo da tela atual
+  const steps = useMemo(() => {
+    const isMobile = window.innerWidth < 768;
+    const suffix = isMobile ? "-mobile" : "";
+
+    const sidebarAdjustments = {
+      placement: isMobile ? "bottom" : "right",
+      disableScroll: !isMobile,
+      spotlightPadding: isMobile ? 4 : 3,
+      spotlightOffsetX: isMobile ? 0 : -8,
+      spotlightOffsetY: 0,
+      cardOffsetX: isMobile ? 0 : -8,
+      cardOffsetY: isMobile ? 12 : 0,
+    };
+
+    const allSteps = [
       {
-        selector: "[data-tour='sidebar']",
+        selector: `[data-tour='sidebar${suffix}']`,
         title: "Menu lateral",
         text: "Aqui ficam as principais ferramentas do mapa. Você pode acessar camadas, legendas, busca, medição, marcadores, impressão, limpar o mapa e ativar tela cheia.",
-        placement: "right",
-        disableScroll: true,
+        placement: isMobile ? "bottom" : "right",
+        disableScroll: !isMobile,
         spotlightPadding: 0,
-        spotlightOffsetX: -8,
+        spotlightOffsetX: isMobile ? 0 : -8,
         spotlightOffsetY: 0,
-        cardOffsetX: -8,
-        cardOffsetY: 0,
+        cardOffsetX: isMobile ? 0 : -8,
+        cardOffsetY: isMobile ? 12 : 0,
       },
       {
-        selector: "[data-tour='layers-button']",
+        selector: `[data-tour='layers-button${suffix}']`,
         title: "Camadas",
         text: "Neste botão você acessa a lista de mapas temáticos disponíveis. Ao marcar uma camada, ela aparece sobre o mapa.",
-        ...sidebarStepAdjustments,
+        ...sidebarAdjustments,
       },
       {
-        selector: "[data-tour='legend-button']",
+        selector: `[data-tour='legend-button${suffix}']`,
         title: "Legendas",
         text: "Aqui ficam as informações das camadas ativas, incluindo descrição, categoria, subcategoria e prévia visual quando disponível.",
-        ...sidebarStepAdjustments,
+        ...sidebarAdjustments,
       },
       {
-        selector: "[data-tour='search-button']",
+        selector: `[data-tour='search-button${suffix}']`,
         title: "Busca de locais",
         text: "Use esta opção para pesquisar endereços, bairros, locais de interesse ou coordenadas no mapa.",
-        ...sidebarStepAdjustments,
+        ...sidebarAdjustments,
       },
       {
-        selector: "[data-tour='measure-button']",
+        selector: `[data-tour='measure-button${suffix}']`,
         title: "Medição",
         text: "Nesta ferramenta você pode medir distâncias e áreas diretamente no mapa. É útil para calcular trechos, perímetros e áreas aproximadas.",
-        ...sidebarStepAdjustments,
+        ...sidebarAdjustments,
       },
       {
-        selector: "[data-tour='bookmarks-button']",
+        selector: `[data-tour='bookmarks-button${suffix}']`,
         title: "Marcadores",
         text: "Aqui ficam as camadas favoritas. Você pode marcar camadas com estrela para acessá-las rapidamente depois.",
-        ...sidebarStepAdjustments,
+        ...sidebarAdjustments,
       },
       {
-        selector: "[data-tour='print-button']",
+        selector: `[data-tour='print-button${suffix}']`,
         title: "Impressão",
         text: "Nesta área você poderá imprimir o mapa atual, salvar como PDF e, futuramente, exportar a área do mapa como PNG ou JPEG.",
-        ...sidebarStepAdjustments,
+        ...sidebarAdjustments,
       },
       {
-        selector: "[data-tour='clear-button']",
+        selector: `[data-tour='clear-button${suffix}']`,
         title: "Limpar mapa",
         text: "Este botão remove as camadas ativas e limpa desenhos ou medições feitas no mapa.",
-        ...sidebarStepAdjustments,
+        ...sidebarAdjustments,
       },
       {
-        selector: "[data-tour='fullscreen-button']",
+        selector: `[data-tour='fullscreen-button${suffix}']`,
         title: "Tela cheia",
         text: "Use este botão para expandir o sistema em tela cheia e aproveitar melhor a visualização do mapa.",
-        ...sidebarStepAdjustments,
+        ...sidebarAdjustments,
       },
+      /*
+       * Botões Flutuantes do Mapa (Fora da Sidebar)
+       * Estes não recebem sufixo. Ajustamos o placement para "top" no celular
+       * para que o card não cubra os botões.
+       */
       {
         selector: "[data-tour='map-zoom-controls']",
         title: "Controles de zoom",
         text: "Estes botões permitem aproximar ou afastar o mapa rapidamente usando o zoom manual.",
-        placement: "left",
+        placement: isMobile ? "top" : "left",
         disableScroll: true,
         spotlightPadding: 6,
         spotlightOffsetX: 0,
         spotlightOffsetY: 0,
-        cardOffsetX: -8,
-        cardOffsetY: 0,
+        cardOffsetX: isMobile ? 0 : -8,
+        cardOffsetY: isMobile ? -12 : 0,
       },
       {
         selector: "[data-tour='contact-button']",
         title: "Contato",
         text: "Neste menu você pode enviar dúvidas, sugestões, solicitações ou relatar problemas encontrados no mapa.",
-        placement: "bottom",
+        placement: isMobile ? "top" : "bottom",
         disableScroll: true,
         spotlightPadding: 8,
         spotlightOffsetX: 0,
         spotlightOffsetY: 0,
         cardOffsetX: 0,
-        cardOffsetY: 0,
+        cardOffsetY: isMobile ? -12 : 0,
       },
       {
         selector: "[data-tour='about-button']",
         title: "Sobre",
         text: "Aqui você acessa uma página com informações sobre a cidade e sobre o projeto Sobral em Mapas.",
-        placement: "bottom",
+        placement: isMobile ? "top" : "bottom",
         disableScroll: true,
         spotlightPadding: 8,
         spotlightOffsetX: 0,
         spotlightOffsetY: 0,
         cardOffsetX: 0,
-        cardOffsetY: 0,
+        cardOffsetY: isMobile ? -12 : 0,
       },
       {
         selector: "[data-tour='login-area']",
         title: "Área do usuário",
         text: "Neste espaço ficam as opções de login, acesso administrativo e informações do usuário autenticado.",
-        placement: "bottom-left",
+        placement: isMobile ? "top" : "bottom-left",
         disableScroll: true,
         spotlightPadding: 8,
         spotlightOffsetX: 0,
         spotlightOffsetY: 0,
         cardOffsetX: 0,
-        cardOffsetY: 0,
+        cardOffsetY: isMobile ? -12 : 0,
       },
       {
         selector: "[data-tour='chat-button']",
         title: "Chat",
         text: "O chat pode auxiliar o usuário com dúvidas rápidas, orientações e apoio durante o uso do sistema.",
-        placement: "left",
+        placement: isMobile ? "top" : "left",
         disableScroll: true,
         spotlightPadding: 8,
         spotlightOffsetX: 0,
         spotlightOffsetY: 0,
-        cardOffsetX: -8,
-        cardOffsetY: 0,
+        cardOffsetX: isMobile ? 0 : -8,
+        cardOffsetY: isMobile ? -12 : 0,
       },
-    ],
-    []
-  );
+    ];
 
-  const [currentStep, setCurrentStep] =
-    useState(0);
+    if (isMobile) {
+      return allSteps.filter(step => 
+        !step.selector.includes('map-zoom-controls') &&
+        !step.selector.includes('login-area') &&
+        !step.selector.includes('contact-button') &&
+        !step.selector.includes('about-button') &&
+        !step.selector.includes('chat-button')
+      );
+    }
 
-  /*
-   * A posição não é apagada durante a troca de passos.
-   *
-   * Assim, o card permanece na posição anterior e
-   * desliza suavemente quando a nova posição chegar.
-   */
-  const [targetRect, setTargetRect] =
-    useState(null);
+    return allSteps;
+  }, []);
 
   const step = steps[currentStep];
+  const isFirst = currentStep === 0;
+  const isLast = currentStep === steps.length - 1;
 
-  const isFirst =
-    currentStep === 0;
+  // Dispara o evento para abrir/fechar o menu mobile dependendo do passo
+  useEffect(() => {
+    if (!open) return;
 
-  const isLast =
-    currentStep === steps.length - 1;
+    const isMobile = window.innerWidth < 768;
+    if (!isMobile) return;
+
+    const isSidebarStep = currentStep <= 8;
+
+    window.dispatchEvent(
+      new CustomEvent("sobral-tutorial-sidebar", {
+        detail: { open: isSidebarStep },
+      })
+    );
+  }, [currentStep, open]);
 
   const handleClose = useCallback(() => {
     setCurrentStep(0);
     setTargetRect(null);
-
     onClose();
   }, [onClose]);
 
   const goToPreviousStep = useCallback(() => {
-    setCurrentStep((previous) =>
-      Math.max(previous - 1, 0)
-    );
+    setCurrentStep((previous) => Math.max(previous - 1, 0));
   }, []);
 
   const goToNextStep = useCallback(() => {
-    setCurrentStep((previous) =>
-      Math.min(
-        previous + 1,
-        steps.length - 1
-      )
-    );
+    setCurrentStep((previous) => Math.min(previous + 1, steps.length - 1));
   }, [steps.length]);
 
-  /*
-   * Controles pelo teclado.
-   */
+  // Controles do teclado
   useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
+    if (!open) return undefined;
 
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         handleClose();
         return;
       }
-
       if (event.key === "ArrowRight") {
         goToNextStep();
         return;
       }
-
       if (event.key === "ArrowLeft") {
         goToPreviousStep();
       }
     };
 
-    document.addEventListener(
-      "keydown",
-      handleKeyDown
-    );
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, handleClose, goToNextStep, goToPreviousStep]);
 
-    return () => {
-      document.removeEventListener(
-        "keydown",
-        handleKeyDown
-      );
-    };
-  }, [
-    open,
-    handleClose,
-    goToNextStep,
-    goToPreviousStep,
-  ]);
-
-  /*
-   * Localiza e mede o elemento do passo atual.
-   *
-   * requestAnimationFrame permite que o navegador
-   * termine o layout antes de obter as coordenadas.
-   *
-   * No primeiro passo, o card só será mostrado depois
-   * que essa primeira medição estiver pronta.
-   *
-   * Nos passos seguintes, a posição anterior permanece
-   * ativa, permitindo a animação suave.
-   */
   useLayoutEffect(() => {
-    if (!open || !step) {
-      return undefined;
-    }
+    if (!open || !step) return undefined;
 
     let animationFrameId = null;
     let scrollTimeoutId = null;
+    let transitionTimeoutId = null;
     let resizeObserver = null;
     let cancelled = false;
 
     const measureTarget = () => {
-      const element =
-        document.querySelector(
-          step.selector
-        );
+      const element = document.querySelector(step.selector);
 
-      /*
-       * Não apagamos targetRect caso o elemento
-       * ainda não esteja disponível.
-       *
-       * Isso evita que o card desapareça durante
-       * a troca entre os passos.
-       */
-      if (!element || cancelled) {
-        return;
-      }
+      if (!element || cancelled) return;
 
-      const rect =
-        element.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
 
       setTargetRect({
         top: rect.top,
@@ -291,304 +260,125 @@ export default function TutorialOverlay({
 
     const scheduleMeasurement = () => {
       if (animationFrameId !== null) {
-        window.cancelAnimationFrame(
-          animationFrameId
-        );
+        window.cancelAnimationFrame(animationFrameId);
       }
-
-      animationFrameId =
-        window.requestAnimationFrame(() => {
-          measureTarget();
-        });
-    };
-
-    const element =
-      document.querySelector(
-        step.selector
-      );
-
-    if (element && !step.disableScroll) {
-      element.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "center",
+      animationFrameId = window.requestAnimationFrame(() => {
+        measureTarget();
       });
-
-      /*
-       * Mede imediatamente e também depois
-       * da rolagem suave.
-       */
-      scheduleMeasurement();
-
-      scrollTimeoutId =
-        window.setTimeout(() => {
-          scheduleMeasurement();
-        }, 300);
-    } else {
-      /*
-       * Os passos da sidebar não precisam esperar.
-       */
-      scheduleMeasurement();
-    }
-
-    const handleWindowChange = () => {
-      scheduleMeasurement();
     };
 
-    window.addEventListener(
-      "resize",
-      handleWindowChange
-    );
+    const isMobile = window.innerWidth < 768;
+    const isSidebarStep = currentStep <= 8;
 
-    window.addEventListener(
-      "scroll",
-      handleWindowChange,
-      true
-    );
+    // Se no Mobile ele for transicionar entre um passo de dentro do Menu
+    // para um de fora, precisamos de uma pausa leve para o DOM redesenhar 
+    // o bloqueio escuro sumindo.
+    const waitTime = isMobile && !isSidebarStep ? 350 : 0;
 
-    /*
-     * Atualiza a posição caso o próprio elemento
-     * mude de tamanho.
-     */
-    if (
-      element &&
-      typeof ResizeObserver !== "undefined"
-    ) {
-      resizeObserver =
-        new ResizeObserver(() => {
-          scheduleMeasurement();
-        });
+    transitionTimeoutId = setTimeout(() => {
+        if (cancelled) return;
 
-      resizeObserver.observe(element);
-    }
+        const element = document.querySelector(step.selector);
+
+        if (element && !step.disableScroll) {
+            element.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+                inline: "center",
+            });
+
+            scheduleMeasurement();
+
+            scrollTimeoutId = window.setTimeout(() => {
+                scheduleMeasurement();
+            }, 350);
+        } else {
+            scheduleMeasurement();
+        }
+
+        const handleWindowChange = () => scheduleMeasurement();
+        window.addEventListener("resize", handleWindowChange);
+        window.addEventListener("scroll", handleWindowChange, true);
+
+        if (element && typeof ResizeObserver !== "undefined") {
+            resizeObserver = new ResizeObserver(() => scheduleMeasurement());
+            resizeObserver.observe(element);
+        }
+    }, waitTime);
 
     return () => {
       cancelled = true;
 
-      if (animationFrameId !== null) {
-        window.cancelAnimationFrame(
-          animationFrameId
-        );
-      }
+      if (animationFrameId !== null) window.cancelAnimationFrame(animationFrameId);
+      if (scrollTimeoutId !== null) window.clearTimeout(scrollTimeoutId);
+      if (transitionTimeoutId !== null) clearTimeout(transitionTimeoutId);
+      if (resizeObserver) resizeObserver.disconnect();
 
-      if (scrollTimeoutId !== null) {
-        window.clearTimeout(
-          scrollTimeoutId
-        );
-      }
-
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-      }
-
-      window.removeEventListener(
-        "resize",
-        handleWindowChange
-      );
-
-      window.removeEventListener(
-        "scroll",
-        handleWindowChange,
-        true
-      );
+      window.removeEventListener("resize", () => scheduleMeasurement());
+      window.removeEventListener("scroll", () => scheduleMeasurement(), true);
     };
-  }, [open, step]);
+  }, [open, step, currentStep]);
 
-  /*
-   * Impede a página de rolar enquanto
-   * o tutorial estiver aberto.
-   */
   useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-
-    const originalOverflow =
-      document.body.style.overflow;
-
-    document.body.style.overflow =
-      "hidden";
-
+    if (!open) return undefined;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow =
-        originalOverflow;
+      document.body.style.overflow = originalOverflow;
     };
   }, [open]);
 
-  if (!open || !step) {
-    return null;
-  }
+  if (!open || !step) return null;
 
-  const spotlightStyle =
-    getSpotlightStyle(
-      targetRect,
-      step
-    );
-
-  const cardStyle =
-    getCardStyle(
-      targetRect,
-      step
-    );
+  const spotlightStyle = getSpotlightStyle(targetRect, step);
+  const cardStyle = getCardStyle(targetRect, step);
 
   return (
-    <div
-      className="
-        fixed
-        inset-0
-        z-[99999]
-        pointer-events-none
-      "
-    >
-      {/*
-       * Enquanto a primeira posição ainda não foi
-       * calculada, aparece apenas o fundo escuro.
-       *
-       * O card não aparece no centro.
-       */}
+    <div className="fixed inset-0 z-[99999] pointer-events-none">
       {!targetRect && (
         <>
-          <div
-            className="
-              absolute
-              inset-0
-              bg-slate-950/80
-            "
-          />
-
+          <div className="absolute inset-0 bg-slate-950/80" />
           <button
             type="button"
             onClick={handleClose}
             aria-label="Fechar tutorial"
-            className="
-              absolute
-              top-5
-              right-5
-              h-10
-              w-10
-              rounded-xl
-              bg-white
-              text-slate-700
-              shadow-xl
-              pointer-events-auto
-              flex
-              items-center
-              justify-center
-              hover:bg-slate-100
-              transition
-            "
+            className="absolute top-5 right-5 h-10 w-10 rounded-xl bg-white text-slate-700 shadow-xl pointer-events-auto flex items-center justify-center hover:bg-slate-100 transition"
           >
             <X size={19} />
           </button>
         </>
       )}
 
-      {/*
-       * Spotlight com animação suave entre
-       * posição, largura e altura.
-       */}
       {targetRect && (
         <div
-          className="
-            absolute
-            rounded-3xl
-            border-4
-            border-amber-400
-            bg-transparent
-            shadow-[0_0_0_9999px_rgba(15,23,42,0.78)]
-
-            transition-[top,left,width,height]
-            duration-300
-            ease-out
-          "
+          className="absolute rounded-3xl border-4 border-amber-400 bg-transparent shadow-[0_0_0_9999px_rgba(15,23,42,0.78)] transition-[top,left,width,height] duration-300 ease-out"
           style={spotlightStyle}
         />
       )}
 
-      {/*
-       * O card só é renderizado depois da primeira
-       * medição, eliminando o salto do centro.
-       *
-       * Depois disso, top e left são animados
-       * durante as trocas de passos.
-       */}
       {targetRect && (
         <div
-          className="
-            absolute
-            w-[360px]
-            max-w-[calc(100vw-2rem)]
-            bg-white
-            rounded-3xl
-            shadow-2xl
-            border
-            border-slate-200
-            pointer-events-auto
-            overflow-hidden
-
-            transition-[top,left]
-            duration-300
-            ease-out
-          "
+          className="absolute w-[360px] max-w-[calc(100vw-2rem)] bg-white rounded-3xl shadow-2xl border border-slate-200 pointer-events-auto overflow-hidden transition-[top,left] duration-300 ease-out"
           style={cardStyle}
         >
-          <div
-            className="
-              p-5
-              bg-gradient-to-r
-              from-blue-700
-              to-blue-900
-              text-white
-            "
-          >
+          <div className="p-5 bg-gradient-to-r from-blue-700 to-blue-900 text-white">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div
-                  className="
-                    h-11
-                    w-11
-                    rounded-2xl
-                    bg-white/15
-                    flex
-                    items-center
-                    justify-center
-                    shrink-0
-                  "
-                >
-                  <MousePointer2
-                    size={21}
-                  />
+                <div className="h-11 w-11 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
+                  <MousePointer2 size={21} />
                 </div>
-
                 <div>
                   <p className="text-xs text-blue-100 font-bold">
-                    Passo{" "}
-                    {currentStep + 1} de{" "}
-                    {steps.length}
+                    Passo {currentStep + 1} de {steps.length}
                   </p>
-
-                  <h2 className="text-lg font-black">
-                    {step.title}
-                  </h2>
+                  <h2 className="text-lg font-black">{step.title}</h2>
                 </div>
               </div>
-
               <button
                 type="button"
                 onClick={handleClose}
                 aria-label="Fechar tutorial"
-                className="
-                  h-9
-                  w-9
-                  rounded-xl
-                  bg-white/10
-                  hover:bg-white/20
-                  transition
-                  flex
-                  items-center
-                  justify-center
-                  shrink-0
-                "
+                className="h-9 w-9 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center shrink-0"
               >
                 <X size={18} />
               </button>
@@ -596,60 +386,26 @@ export default function TutorialOverlay({
           </div>
 
           <div className="p-5">
-            <p className="text-sm text-slate-600 leading-relaxed">
-              {step.text}
-            </p>
-
+            <p className="text-sm text-slate-600 leading-relaxed">{step.text}</p>
             <div className="flex items-center gap-1 mt-5 flex-wrap">
-              {steps.map(
-                (tutorialStep, index) => (
-                  <span
-                    key={`${tutorialStep.selector}-${index}`}
-                    className={`
-                      h-2
-                      rounded-full
-                      transition-all
-                      duration-300
-
-                      ${
-                        index ===
-                        currentStep
-                          ? "w-8 bg-blue-700"
-                          : "w-2 bg-slate-200"
-                      }
-                    `}
-                  />
-                )
-              )}
+              {steps.map((tutorialStep, index) => (
+                <span
+                  key={`${tutorialStep.selector}-${index}`}
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    index === currentStep ? "w-8 bg-blue-700" : "w-2 bg-slate-200"
+                  }`}
+                />
+              ))}
             </div>
 
             <div className="flex items-center justify-between gap-3 mt-6">
               <button
                 type="button"
-                onClick={
-                  goToPreviousStep
-                }
+                onClick={goToPreviousStep}
                 disabled={isFirst}
-                className="
-                  px-4
-                  py-2.5
-                  rounded-2xl
-                  bg-slate-100
-                  text-slate-700
-                  font-bold
-                  hover:bg-slate-200
-                  disabled:opacity-40
-                  disabled:cursor-not-allowed
-                  transition
-                  flex
-                  items-center
-                  gap-2
-                "
+                className="px-4 py-2.5 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-2"
               >
-                <ArrowLeft
-                  size={16}
-                />
-
+                <ArrowLeft size={16} />
                 Voltar
               </button>
 
@@ -657,44 +413,18 @@ export default function TutorialOverlay({
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="
-                    px-4
-                    py-2.5
-                    rounded-2xl
-                    bg-blue-700
-                    text-white
-                    font-bold
-                    hover:bg-blue-800
-                    transition
-                  "
+                  className="px-4 py-2.5 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 transition"
                 >
                   Concluir
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={
-                    goToNextStep
-                  }
-                  className="
-                    px-4
-                    py-2.5
-                    rounded-2xl
-                    bg-blue-700
-                    text-white
-                    font-bold
-                    hover:bg-blue-800
-                    transition
-                    flex
-                    items-center
-                    gap-2
-                  "
+                  onClick={goToNextStep}
+                  className="px-4 py-2.5 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 transition flex items-center gap-2"
                 >
                   Próximo
-
-                  <ArrowRight
-                    size={16}
-                  />
+                  <ArrowRight size={16} />
                 </button>
               )}
             </div>
@@ -702,15 +432,7 @@ export default function TutorialOverlay({
             <button
               type="button"
               onClick={handleClose}
-              className="
-                mt-4
-                w-full
-                text-xs
-                font-bold
-                text-slate-400
-                hover:text-slate-600
-                transition
-              "
+              className="mt-4 w-full text-xs font-bold text-slate-400 hover:text-slate-600 transition"
             >
               Pular tutorial
             </button>
@@ -721,170 +443,67 @@ export default function TutorialOverlay({
   );
 }
 
-function getSpotlightStyle(
-  rect,
-  step = {}
-) {
-  if (!rect) {
-    return {};
-  }
-
-  const padding =
-    step.spotlightPadding ?? 8;
-
-  const offsetX =
-    step.spotlightOffsetX ?? 0;
-
-  const offsetY =
-    step.spotlightOffsetY ?? 0;
+function getSpotlightStyle(rect, step = {}) {
+  if (!rect) return {};
+  const padding = step.spotlightPadding ?? 8;
+  const offsetX = step.spotlightOffsetX ?? 0;
+  const offsetY = step.spotlightOffsetY ?? 0;
 
   return {
-    top: Math.max(
-      rect.top -
-        padding +
-        offsetY,
-      8
-    ),
-
-    left: Math.max(
-      rect.left -
-        padding +
-        offsetX,
-      8
-    ),
-
-    width:
-      rect.width +
-      padding * 2,
-
-    height:
-      rect.height +
-      padding * 2,
+    top: Math.max(rect.top - padding + offsetY, 8),
+    left: Math.max(rect.left - padding + offsetX, 8),
+    width: rect.width + padding * 2,
+    height: rect.height + padding * 2,
   };
 }
 
-function getCardStyle(
-  rect,
-  step = {}
-) {
-  /*
-   * Não há mais posicionamento central.
-   *
-   * O card só é renderizado quando rect existe.
-   */
-  if (!rect) {
-    return {
-      visibility: "hidden",
-      pointerEvents: "none",
-    };
-  }
+function getCardStyle(rect, step = {}) {
+  if (!rect) return { visibility: "hidden", pointerEvents: "none" };
 
-  const placement =
-    step.placement || "right";
-
+  const placement = step.placement || "right";
   const cardWidth = 360;
   const cardHeight = 300;
   const margin = 14;
-
-  const cardOffsetX =
-    step.cardOffsetX ?? 0;
-
-  const cardOffsetY =
-    step.cardOffsetY ?? 0;
-
-  const windowWidth =
-    window.innerWidth;
-
-  const windowHeight =
-    window.innerHeight;
+  const cardOffsetX = step.cardOffsetX ?? 0;
+  const cardOffsetY = step.cardOffsetY ?? 0;
+  const windowWidth = window.innerWidth;
+  const windowHeight = window.innerHeight;
 
   let top = rect.top;
-
-  let left =
-    rect.right + margin;
+  let left = rect.right + margin;
 
   if (placement === "left") {
-    left =
-      rect.left -
-      cardWidth -
-      margin;
-
+    left = rect.left - cardWidth - margin;
     top = rect.top;
-  }
-
-  if (placement === "right") {
-    left =
-      rect.right +
-      margin;
-
+  } else if (placement === "right") {
+    left = rect.right + margin;
     top = rect.top;
-  }
-
-  if (placement === "bottom") {
+  } else if (placement === "bottom") {
     left = rect.left;
-
-    top =
-      rect.bottom +
-      margin;
-  }
-
-  if (
-    placement === "bottom-left"
-  ) {
-    left =
-      rect.right -
-      cardWidth;
-
-    top =
-      rect.bottom +
-      margin;
-  }
-
-  if (placement === "top") {
+    top = rect.bottom + margin;
+  } else if (placement === "bottom-left") {
+    left = rect.right - cardWidth;
+    top = rect.bottom + margin;
+  } else if (placement === "top") {
     left = rect.left;
-
-    top =
-      rect.top -
-      cardHeight -
-      margin;
+    top = rect.top - cardHeight - margin;
   }
 
   left += cardOffsetX;
   top += cardOffsetY;
 
-  /*
-   * Mantém o card dentro da tela.
-   */
-  if (
-    left + cardWidth >
-    windowWidth - margin
-  ) {
-    left =
-      windowWidth -
-      cardWidth -
-      margin;
+  if (left + cardWidth > windowWidth - margin) {
+    left = windowWidth - cardWidth - margin;
   }
-
   if (left < margin) {
     left = margin;
   }
-
-  if (
-    top + cardHeight >
-    windowHeight - margin
-  ) {
-    top =
-      windowHeight -
-      cardHeight -
-      margin;
+  if (top + cardHeight > windowHeight - margin) {
+    top = windowHeight - cardHeight - margin;
   }
-
   if (top < margin) {
     top = margin;
   }
 
-  return {
-    top,
-    left,
-  };
+  return { top, left };
 }

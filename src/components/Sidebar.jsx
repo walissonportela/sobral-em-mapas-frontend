@@ -50,7 +50,12 @@ export default function Sidebar({
   mapToolsRef,
   forceOpenSignal,
 }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() => {
+      if (typeof window !== 'undefined') {
+          return window.innerWidth >= 768;
+      }
+      return true; 
+  });
   const [layers, setLayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -204,7 +209,10 @@ export default function Sidebar({
       );
     }
 
-    if (name.includes("saúde")) {
+    if (
+      name.includes("saúde") ||
+      name.includes("saude")
+    ) {
       return (
         <HeartPulse
           size={16}
@@ -290,29 +298,64 @@ export default function Sidebar({
     }
   };
 
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+
+    window.addEventListener("resize", checkMobile);
+
+    return () =>
+      window.removeEventListener("resize", checkMobile);
+  }, []);
+
   return (
+
+    <>
+    {isMobile && isOpen && (
+      <div
+        onClick={() => setIsOpen(false)}
+        className="
+          fixed
+          inset-0
+          top-[72px]
+          bg-black/40
+          z-[999]
+        "
+      />
+    )}
+
     <div
       className={`fixed top-[72px] left-0 bottom-0 z-[1000] flex transition-all duration-300 ${
         isOpen
           ? "translate-x-0"
-          : "-translate-x-[420px]"
+          : "-translate-x-full md:-translate-x-[430px]"
       }`}
     >
       <div
         data-tour="sidebar"
-        className="
-          w-16
-          bg-gradient-to-b
-          from-blue-700
-          via-blue-800
-          to-blue-900
-          shadow-2xl
-          flex
-          flex-col
-          items-center
-          py-3
-          gap-2
-        "
+        className={`
+            ${
+              isMobile
+                ? "hidden"
+                : "w-16"
+            }
+
+            bg-gradient-to-b
+            from-blue-700
+            via-blue-800
+            to-blue-900
+            shadow-2xl
+            flex
+            flex-col
+            items-center
+            py-3
+            gap-2
+        `}
       >
         <SidebarButton
           dataTour="layers-button"
@@ -382,16 +425,29 @@ export default function Sidebar({
       </div>
 
       <aside
-        className="
-          w-[360px]
-          bg-white
-          border-r
-          border-gray-200
-          shadow-2xl
-          flex
-          flex-col
-        "
+          className="
+              w-[300px]
+              sm:w-[310px]
+              lg:w-[360px]
+              bg-white
+              border-r
+              shadow-2xl
+              flex
+              flex-col
+          "
       >
+
+         {isMobile && (
+            <MobileToolbar
+              activePanel={activePanel}
+              setActivePanel={setActivePanel}
+              favoriteLayers={favoriteLayers}
+              activeLayers={activeLayers}
+              handleClearEverything={handleClearEverything}
+              toggleFullscreen={toggleFullscreen}
+            />
+          )}
+
         {activePanel === "layers" && (
           <>
             <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5 border-b border-white/10">
@@ -552,45 +608,37 @@ export default function Sidebar({
                         )}
                       </button>
 
-                      {expanded[category] && (
+                      <div 
+                        className={`
+                          overflow-hidden transition-all duration-400 ease-in-out
+                          ${expanded[category] ? "max-h-[800px] opacity-100" : "max-h-0 opacity-0"}
+                        `}
+                      >
                         <div className="pb-3">
-                          {Object.entries(subs).map(
-                            ([sub, items]) => (
-                              <div
-                                key={sub}
-                                className="px-4 mb-4"
-                              >
-                                <div className="flex items-center gap-2 mb-2">
-                                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-
-                                  <span className="text-xs font-bold uppercase tracking-wide text-blue-600">
-                                    {sub}
-                                  </span>
-                                </div>
-
-                                {items.map((layer) => (
-                                  <LayerRow
-                                    key={layer.id}
-                                    layer={layer}
-                                    active={isLayerActive(
-                                      layer
-                                    )}
-                                    favorite={isLayerFavorite(
-                                      layer
-                                    )}
-                                    onToggleLayer={
-                                      onToggleLayer
-                                    }
-                                    onToggleFavorite={
-                                      toggleFavoriteLayer
-                                    }
-                                  />
-                                ))}
+                          {Object.entries(subs).map(([sub, items]) => (
+                            <div key={sub} className="px-4 mb-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                <span className="text-xs font-bold uppercase tracking-wide text-blue-600">
+                                  {sub}
+                                </span>
                               </div>
-                            )
-                          )}
+
+                              {items.map((layer) => (
+                                <LayerRow
+                                  key={layer.id}
+                                  layer={layer}
+                                  active={isLayerActive(layer)}
+                                  favorite={isLayerFavorite(layer)}
+                                  onToggleLayer={onToggleLayer}
+                                  onToggleFavorite={toggleFavoriteLayer}
+                                  onCloseSidebar={() => setIsOpen(false)}
+                                />
+                              ))}
+                            </div>
+                          ))}
                         </div>
-                      )}
+                      </div>
                     </div>
                   )
                 )}
@@ -728,21 +776,26 @@ export default function Sidebar({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="
-          w-12
+        className={`
           h-12
+          w-12
           bg-gradient-to-b
           from-blue-700
           to-blue-900
           text-white
-          rounded-r-xl
           shadow-xl
           flex
           items-center
           justify-center
-          hover:scale-105
           transition-all
-        "
+          z-[1002]
+
+          ${
+            isMobile
+            ? "absolute right-[-48px] top-5 rounded-r-xl"
+            : "absolute right-[-48px] top-5 rounded-r-xl"
+          }
+        `}
       >
         {isOpen ? (
           <ChevronLeft size={18} />
@@ -751,6 +804,7 @@ export default function Sidebar({
         )}
       </button>
     </div>
+    </>
   );
 }
 
@@ -853,12 +907,174 @@ function SidebarButton({
   );
 }
 
+function MobileToolbar({
+    activePanel,
+    setActivePanel,
+    favoriteLayers,
+    activeLayers,
+    handleClearEverything,
+    toggleFullscreen
+}) {
+
+    return (
+        <div
+              data-tour="sidebar-mobile"
+              className="
+                  md:hidden
+                  bg-gradient-to-r
+                  from-blue-700
+                  via-blue-800
+                  to-blue-900
+                  border-b
+                  border-white/10
+                  shadow-lg
+                  overflow-x-auto
+                  overflow-y-hidden
+                  scrollbar-hide
+              "
+          >
+            <div className="
+                flex
+                w-max
+                gap-2
+                px-3
+                py-2
+            ">
+
+                <MobileButton
+                    dataTour="layers-button-mobile"
+                    icon={<Layers size={18} />}
+                    active={activePanel === "layers"}
+                    onClick={() => setActivePanel("layers")}
+                />
+
+                <MobileButton
+                    dataTour="legend-button-mobile"
+                    icon={<Info size={18} />}
+                    active={activePanel === "legends"}
+                    onClick={() => setActivePanel("legends")}
+                    badge={activeLayers.length}
+                />
+
+                <MobileButton
+                    dataTour="search-button-mobile"
+                    icon={<Search size={18} />}
+                    active={activePanel === "search"}
+                    onClick={() => setActivePanel("search")}
+                />
+
+                <MobileButton
+                    dataTour="measure-button-mobile"
+                    icon={<Ruler size={18} />}
+                    active={activePanel === "measure"}
+                    onClick={() => setActivePanel("measure")}
+                />
+
+                <MobileButton
+                    dataTour="bookmarks-button-mobile"
+                    icon={<Bookmark size={18} />}
+                    active={activePanel === "bookmarks"}
+                    onClick={() => setActivePanel("bookmarks")}
+                    badge={favoriteLayers.length}
+                />
+
+                <MobileButton
+                    dataTour="print-button-mobile"
+                    icon={<Printer size={18} />}
+                    active={activePanel === "print"}
+                    onClick={() => setActivePanel("print")}
+                />
+
+                <MobileButton
+                    dataTour="clear-button-mobile"
+                    icon={<Eraser size={18} />}
+                    active={false}
+                    onClick={handleClearEverything}
+                />
+
+                <MobileButton
+                    dataTour="fullscreen-button-mobile"
+                    icon={<Maximize size={18} />}
+                    active={false}
+                    onClick={toggleFullscreen}
+                />
+
+            </div>
+        </div>
+    );
+}
+
+function MobileButton({
+    icon,
+    active,
+    badge = 0,
+    title,
+    dataTour,
+    onClick,
+}) {
+    return (
+        <div
+            data-tour={dataTour}
+            className="
+                relative
+                shrink-0
+            "
+        >
+            <button
+                type="button"
+                title={title}
+                onClick={onClick}
+                className={`
+                    relative
+                    h-11
+                    w-11
+                    rounded-xl
+                    flex
+                    items-center
+                    justify-center
+                    transition-all
+                    duration-200
+                    ${
+                        active
+                            ? "bg-white text-blue-700 shadow-md"
+                            : "text-white hover:bg-white/15"
+                    }
+                `}
+            >
+                {icon}
+
+                {badge > 0 && (
+                    <span
+                        className="
+                            absolute
+                            -top-1
+                            -right-1
+                            min-w-5
+                            h-5
+                            rounded-full
+                            bg-amber-400
+                            text-[10px]
+                            font-black
+                            flex
+                            items-center
+                            justify-center
+                        "
+                    >
+                        {badge}
+                    </span>
+                )}
+            </button>
+        </div>
+    );
+}
+
 function LayerRow({
   layer,
   active,
   favorite,
   onToggleLayer,
   onToggleFavorite,
+  onCloseSidebar
 }) {
   const inputId = `layer-checkbox-${layer.id}`;
 
@@ -882,7 +1098,13 @@ function LayerRow({
         id={inputId}
         type="checkbox"
         checked={active}
-        onChange={() => onToggleLayer(layer)}
+        onChange={() => {
+            onToggleLayer(layer);
+
+            if (window.innerWidth < 768) {
+                onCloseSidebar?.();
+            }
+        }}
         className="h-4 w-4 accent-blue-700 shrink-0"
       />
 
@@ -1239,29 +1461,6 @@ function MeasurePanel({ mapToolsRef }) {
             </p>
           </button>
 
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() =>
-                mapToolsRef?.current?.zoomIn?.()
-              }
-              className="rounded-2xl bg-white border border-slate-200 p-4 font-bold text-slate-700 hover:bg-slate-50 transition flex items-center justify-center gap-2"
-            >
-              <ZoomIn size={18} />
-              Zoom +
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                mapToolsRef?.current?.zoomOut?.()
-              }
-              className="rounded-2xl bg-white border border-slate-200 p-4 font-bold text-slate-700 hover:bg-slate-50 transition flex items-center justify-center gap-2"
-            >
-              <ZoomOut size={18} />
-              Zoom -
-            </button>
-          </div>
         </div>
       </div>
     </>
