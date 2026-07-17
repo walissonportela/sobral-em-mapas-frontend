@@ -199,7 +199,6 @@ export default function Requests() {
           message,
         });
       } finally {
-        if (!isActive) 
         setLoading(false);
       }
     };

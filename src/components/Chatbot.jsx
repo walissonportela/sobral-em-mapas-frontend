@@ -608,7 +608,7 @@ const Chatbot = () => {
 
             width:100%;
 
-            height:85dvh;
+            height:75dvh;
 
             border-radius:22px 22px 0 0;
 
