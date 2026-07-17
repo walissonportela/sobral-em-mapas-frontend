@@ -46,6 +46,17 @@ const Chatbot = () => {
 
     const toggleChat = () => setIsOpen(!isOpen);
 
+    const [isClosing, setIsClosing] = useState(false);
+
+    const closeChat = () => {
+        setIsClosing(true);
+
+        setTimeout(() => {
+            setIsClosing(false);
+            setIsOpen(false);
+        }, 300);
+    };
+
     const handleSend = async () => {
         if (!inputValue.trim()) return;
 
@@ -83,251 +94,610 @@ const Chatbot = () => {
         }
     };
 
-    const chatStyles = `
-        /* Animações */
-        @keyframes popIn {
-            from { opacity: 0; transform: scale(0.9) translateY(10px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
+   const chatStyles = `
+    /* ===========================
+       ANIMAÇÕES
+    =========================== */
+
+    @keyframes popIn {
+        from {
+            opacity: 0;
+            transform: scale(.9) translateY(10px);
         }
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
         }
-        @keyframes bounce {
-            0%, 80%, 100% { transform: translateY(0); }
-            40% { transform: translateY(-5px); }
+    }
+
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes mobileOpen {
+        from {
+            transform: translateY(100%);
+        }
+        to {
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes bounce {
+        0%,80%,100%{
+            transform:translateY(0);
+        }
+        40%{
+            transform:translateY(-5px);
+        }
+    }
+
+    @keyframes mobileClose{
+
+        from{
+            transform:translateY(0);
+            opacity:1;
         }
 
-        .navisol-wrapper {
-            position: fixed;
-            bottom: 25px;
-            right: 25px;
-            z-index: 9999;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        to{
+            transform:translateY(100%);
+            opacity:0;
         }
 
-        /* Botão Flutuante */
-        .navisol-btn {
-            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-            color: white;
-            border: none;
-            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
-            padding: 12px 24px;
-            border-radius: 50px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        .navisol-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(0, 123, 255, 0.6);
+    }
+
+
+    /* ===========================
+       WRAPPER
+    =========================== */
+
+    .navisol-wrapper{
+        position:fixed;
+        bottom:24px;
+        right:24px;
+        z-index:100;
+        font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    }
+
+
+    /* ===========================
+       BOTÃO
+    =========================== */
+
+    .navisol-btn{
+
+        background:linear-gradient(135deg,#007bff 0%,#0056b3 100%);
+        color:#fff;
+        border:none;
+        box-shadow:0 4px 15px rgba(0,123,255,.4);
+
+        padding:12px 24px;
+
+        border-radius:999px;
+
+        cursor:pointer;
+
+        display:flex;
+        align-items:center;
+        gap:10px;
+
+        font-size:16px;
+        font-weight:600;
+
+        transition:.3s;
+
+    }
+
+    .navisol-btn:hover{
+
+        transform:translateY(-3px);
+
+        box-shadow:0 6px 20px rgba(0,123,255,.6);
+
+    }
+
+
+    /* ===========================
+       JANELA - DESKTOP
+    =========================== */
+
+    .navisol-window{
+
+        width:360px;
+        height:550px;
+
+        background:#fff;
+
+        display:flex;
+        flex-direction:column;
+
+        overflow:hidden;
+
+        border-radius:18px;
+
+        border:1px solid #eaeaea;
+
+        box-shadow:0 10px 30px rgba(0,0,0,.15);
+
+        animation:popIn .3s cubic-bezier(.175,.885,.32,1.275);
+
+    }
+
+
+    /* ===========================
+       DRAGGER
+    =========================== */
+
+    .navisol-dragger{
+
+        display:none;
+
+    }
+
+
+    /* ===========================
+       HEADER
+    =========================== */
+
+    .navisol-header{
+
+        background:linear-gradient(135deg,#007bff 0%,#0056b3 100%);
+
+        color:#fff;
+
+        padding:18px 20px;
+
+        display:flex;
+
+        justify-content:space-between;
+
+        align-items:center;
+
+        font-weight:600;
+
+        font-size:16px;
+
+        box-shadow:0 2px 10px rgba(0,0,0,.1);
+
+        z-index:2;
+
+    }
+
+    .navisol-header-title{
+
+        display:flex;
+
+        align-items:center;
+
+        gap:10px;
+
+        min-width:0;
+
+    }
+
+    .navisol-header-title span{
+
+        white-space:nowrap;
+
+        overflow:hidden;
+
+        text-overflow:ellipsis;
+
+    }
+
+    .navisol-close-btn{
+
+        background:rgba(255,255,255,.1);
+
+        border:none;
+
+        color:#fff;
+
+        width:32px;
+
+        height:32px;
+
+        border-radius:50%;
+
+        display:flex;
+
+        justify-content:center;
+
+        align-items:center;
+
+        cursor:pointer;
+
+        transition:.2s;
+
+    }
+
+    .navisol-close-btn:hover{
+
+        background:rgba(255,255,255,.25);
+
+    }
+
+
+    /* ===========================
+       MENSAGENS
+    =========================== */
+
+    .navisol-messages{
+
+        flex:1;
+
+        padding:20px;
+
+        overflow-y:auto;
+
+        display:flex;
+
+        flex-direction:column;
+
+        gap:12px;
+
+        background:#f8f9fa;
+
+    }
+
+    .navisol-messages::-webkit-scrollbar{
+
+        width:6px;
+
+    }
+
+    .navisol-messages::-webkit-scrollbar-thumb{
+
+        background:#cfd4da;
+
+        border-radius:999px;
+
+    }
+
+
+    .navisol-welcome{
+
+        background:linear-gradient(135deg,#007bff 0%,#0056b3 100%);
+
+        color:white;
+
+        padding:16px;
+
+        border-radius:12px;
+
+        text-align:center;
+
+        font-size:14px;
+
+        margin-bottom:10px;
+
+        animation:slideUp .4s ease;
+
+    }
+
+
+    .navisol-msg{
+
+        padding:12px 16px;
+
+        border-radius:18px;
+
+        max-width:82%;
+
+        font-size:14px;
+
+        line-height:1.5;
+
+        word-break:break-word;
+
+        animation:slideUp .3s;
+
+    }
+
+    .navisol-msg.user{
+
+        align-self:flex-end;
+
+        background:#007bff;
+
+        color:#fff;
+
+        border-bottom-right-radius:4px;
+
+    }
+
+    .navisol-msg.bot{
+
+        align-self:flex-start;
+
+        background:#fff;
+
+        color:#333;
+
+        border:1px solid #e9ecef;
+
+        border-bottom-left-radius:4px;
+
+    }
+
+
+    /* ===========================
+       DIGITAÇÃO
+    =========================== */
+
+    .navisol-typing{
+
+        align-self:flex-start;
+
+        background:#fff;
+
+        border:1px solid #e9ecef;
+
+        border-radius:18px;
+
+        border-bottom-left-radius:4px;
+
+        padding:14px 18px;
+
+        display:flex;
+
+        gap:4px;
+
+    }
+
+    .navisol-typing span{
+
+        width:6px;
+
+        height:6px;
+
+        border-radius:50%;
+
+        background:#adb5bd;
+
+        animation:bounce 1.4s infinite;
+
+    }
+
+
+    /* ===========================
+       INPUT
+    =========================== */
+
+    .navisol-input-area{
+
+        display:flex;
+
+        gap:10px;
+
+        padding:15px;
+
+        align-items:center;
+
+        border-top:1px solid #eaeaea;
+
+        background:white;
+
+    }
+
+    .navisol-input-area input{
+
+        flex:1;
+
+        padding:12px 18px;
+
+        border-radius:25px;
+
+        border:1px solid #ced4da;
+
+        outline:none;
+
+        background:#f8f9fa;
+
+        transition:.3s;
+
+        font-size:14.5px;
+
+    }
+
+    .navisol-input-area input:focus{
+
+        border-color:#80bdff;
+
+        background:white;
+
+    }
+
+    .navisol-send-btn{
+
+        width:44px;
+
+        height:44px;
+
+        border-radius:50%;
+
+        border:none;
+
+        background:#007bff;
+
+        color:white;
+
+        display:flex;
+
+        justify-content:center;
+
+        align-items:center;
+
+        cursor:pointer;
+
+        transition:.25s;
+
+        flex-shrink:0;
+
+    }
+
+    .navisol-send-btn:hover:not(:disabled){
+
+        background:#0056b3;
+
+        transform:scale(1.05);
+
+    }
+
+    .navisol-send-btn:disabled{
+
+        background:#e9ecef;
+
+        color:#adb5bd;
+
+        cursor:not-allowed;
+
+    }
+
+
+    /* ===========================
+       MOBILE
+    =========================== */
+
+    @media (max-width:768px){
+
+        .navisol-wrapper{
+
+            bottom:max(16px,env(safe-area-inset-bottom));
+
+            right:16px;
+
         }
 
-        /* Janela do Chat */
-        .navisol-window {
-            width: 360px;
-            height: 550px;
-            background-color: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-            border: 1px solid #eaeaea;
+        .navisol-btn{
+
+            width:64px;
+
+            height:64px;
+
+            padding:0;
+
+            border-radius:50%;
+
+            justify-content:center;
+
         }
 
-        /* Cabeçalho */
-        .navisol-header {
-            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-            color: #ffffff;
-            padding: 18px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: 600;
-            font-size: 16px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            z-index: 2;
-        }
-        .navisol-header-title { 
-            display: flex; 
-            align-items: center; 
-            gap: 10px; 
-        }
-        .navisol-close-btn {
-            background: rgba(255,255,255,0.1);
-            border: none;
-            color: white;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .navisol-close-btn:hover { background: rgba(255,255,255,0.25); }
+        .navisol-btn span{
 
-        /* Corpo das Mensagens */
-        .navisol-messages {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            background-color: #f8f9fa;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        /* Personalização da barra de rolagem */
-        .navisol-messages::-webkit-scrollbar { width: 6px; }
-        .navisol-messages::-webkit-scrollbar-track { background: transparent; }
-        .navisol-messages::-webkit-scrollbar-thumb { background: #cfd4da; border-radius: 10px; }
+            display:none;
 
-        .navisol-welcome {
-            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-            color: #ffffff;
-            padding: 16px;
-            border-radius: 12px;
-            text-align: center;
-            font-size: 14px;
-            margin-bottom: 10px;
-            box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
-            animation: slideUp 0.4s ease-out forwards;
-            border: none;
         }
 
-        /* Balões de Mensagem */
-        .navisol-msg {
-            padding: 12px 16px;
-            border-radius: 18px;
-            max-width: 82%;
-            font-size: 14px;
-            line-height: 1.5;
-            word-wrap: break-word;
-            animation: slideUp 0.3s ease-out forwards;
-        }
-        .navisol-msg.user {
-            align-self: flex-end;
-            background-color: #007bff;
-            color: white;
-            border-bottom-right-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.25);
-        }
-        .navisol-msg.bot {
-            align-self: flex-start;
-            background-color: #ffffff;
-            color: #333333;
-            border-bottom-left-radius: 4px;
-            border: 1px solid #e9ecef;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        .navisol-window{
+
+            position:fixed;
+
+            left:0;
+
+            right:0;
+
+            bottom:0;
+
+            width:100%;
+
+            height:85dvh;
+
+            border-radius:22px 22px 0 0;
+
+            animation:mobileOpen .35s cubic-bezier(.22,.8,.32,1);
+
         }
 
-        /* Indicador de Digitação */
-        .navisol-typing {
-            align-self: flex-start;
-            background-color: #ffffff;
-            padding: 14px 18px;
-            border-radius: 18px;
-            border-bottom-left-radius: 4px;
-            border: 1px solid #e9ecef;
-            display: flex;
-            gap: 4px;
-            align-items: center;
-            animation: slideUp 0.3s ease-out forwards;
-        }
-        .navisol-typing span {
-            width: 6px;
-            height: 6px;
-            background-color: #adb5bd;
-            border-radius: 50%;
-            display: inline-block;
-            animation: bounce 1.4s infinite ease-in-out both;
-        }
-        .navisol-typing span:nth-child(1) { animation-delay: -0.32s; }
-        .navisol-typing span:nth-child(2) { animation-delay: -0.16s; }
+        .navisol-dragger{
 
-        /* Área de Input */
-        .navisol-input-area {
-            display: flex;
-            padding: 15px;
-            background-color: #ffffff;
-            border-top: 1px solid #eaeaea;
-            gap: 10px;
-            align-items: center;
-        }
-        .navisol-input-area input {
-            flex: 1;
-            padding: 12px 18px;
-            border: 1px solid #ced4da;
-            border-radius: 25px;
-            outline: none;
-            font-size: 14.5px;
-            background-color: #f8f9fa;
-            transition: border-color 0.3s, background-color 0.3s;
-        }
-        .navisol-input-area input:focus {
-            border-color: #80bdff;
-            background-color: #ffffff;
-        }
-        .navisol-send-btn {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: background-color 0.3s, transform 0.2s;
-            flex-shrink: 0;
-        }
-        .navisol-send-btn:hover:not(:disabled) { 
-            background-color: #0056b3; 
-            transform: scale(1.05);
-        }
-        .navisol-send-btn:disabled { 
-            background-color: #e9ecef; 
-            color: #adb5bd;
-            cursor: not-allowed; 
+            display:block;
+
+            width:48px;
+
+            height:5px;
+
+            border-radius:999px;
+
+            background:#d1d5db;
+
+            margin:10px auto 4px;
+
+            flex-shrink:0;
+
         }
 
-        /* Responsividade Mobile */
-        @media (max-width: 768px) {
-            .navisol-wrapper {
-                bottom: 15px;
-                right: 15px;
-            }
-            .navisol-btn {
-                width: 60px;
-                height: 60px;
-                border-radius: 50%;
-                justify-content: center;
-                padding: 0;
-            }
-            .navisol-btn span { display: none; }
-            .navisol-window {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100vw;
-                height: 100vh;
-                border-radius: 0;
-                animation: slideUp 0.3s ease-out forwards;
-            }
-            .navisol-input-area {
-                padding-bottom: 25px;
-            }
+        .navisol-header{
+
+            padding:16px;
+
         }
-    `;
+
+        .navisol-messages{
+
+            padding:14px;
+
+        }
+
+        .navisol-msg{
+
+            max-width:88%;
+
+        }
+
+        .navisol-welcome{
+
+            padding:14px;
+
+            font-size:13px;
+
+        }
+
+        .navisol-welcome strong{
+
+            font-size:16px;
+
+        }
+
+        .navisol-input-area{
+
+            padding:
+                12px
+                14px
+                calc(12px + env(safe-area-inset-bottom))
+                14px;
+
+        }
+
+        .navisol-input-area input{
+
+            padding:11px 16px;
+
+            font-size:16px;
+
+        }
+
+        .navisol-send-btn{
+
+            width:48px;
+
+            height:48px;
+
+        }
+
+        .navisol-window.closing{
+            animation:mobileClose .3s forwards;
+        }
+
+    }
+`;
 
     return (
         <div data-tour="chat-button" className="navisol-wrapper">
@@ -339,13 +709,15 @@ const Chatbot = () => {
                     <span>Chat</span>
                 </button>
             ) : (
-                <div className="navisol-window">
-                    <div className="navisol-header">
+                <div
+                    className={`navisol-window ${isClosing ? 'closing' : ''}`}
+                >
+                        <div className="navisol-header">
                         <div className="navisol-header-title">
                             <BotIcon />
                             <span>Assistente - Sobral em Mapas</span>
                         </div>
-                        <button className="navisol-close-btn" onClick={toggleChat} aria-label="Fechar Chat">
+                        <button className="navisol-close-btn" onClick={closeChat} aria-label="Fechar Chat">
                             <CloseIcon />
                         </button>
                     </div>

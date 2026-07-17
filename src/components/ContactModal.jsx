@@ -140,43 +140,48 @@ export default function ContactModal({
         flex
         items-center
         justify-center
-        p-4
+        p-2 sm:p-4
       "
     >
       <div
-        onClick={(e) =>
-          e.stopPropagation()
-        }
+        onClick={(e) => e.stopPropagation()}
         className="
           bg-white
           w-full
-          max-w-4xl
-          rounded-3xl
-          overflow-hidden
+          max-w-5xl
+          rounded-2xl sm:rounded-3xl
           shadow-2xl
           grid
+          grid-cols-1
           md:grid-cols-2
+          max-h-[95vh]
+          overflow-y-auto
         "
       >
         {/* ESQUERDA */}
         <div
           className="
-            bg-gradient-to-br
-            from-blue-700
-            via-blue-800
-            to-blue-900
-            text-white
-            p-8
-            flex
-            flex-col
-            justify-between
+          hidden
+          md:flex
+          bg-gradient-to-br
+          from-blue-700
+          via-blue-800
+          to-blue-900
+          text-white
+          p-6
+          sm:p-8
+          flex
+          flex-col
+          justify-between
           "
         >
           <div>
             <div
               className="
-                h-16
-                w-16
+                h-12
+                w-12
+                sm:h-16
+                sm:w-16
                 rounded-2xl
                 bg-white/15
                 flex
@@ -188,7 +193,7 @@ export default function ContactModal({
               <Mail size={30} />
             </div>
 
-            <h2 className="text-3xl font-bold mb-3">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-3">
               Entre em Contato
             </h2>
 
@@ -205,7 +210,7 @@ export default function ContactModal({
 
           <div
             className="
-              mt-8
+              mt-6 md:mt-8
               border
               border-dashed
               border-white/30
@@ -230,13 +235,15 @@ export default function ContactModal({
         </div>
 
         {/* DIREITA */}
-        <div className="relative p-8">
+        <div className="relative p-5 sm:p-8 flex flex-col">
           <button
             onClick={handleClose}
             className="
               absolute
-              top-5
-              right-5
+              top-4
+              right-4
+              sm:top-5
+              sm:right-5
               text-gray-400
               hover:text-red-600
               transition
@@ -245,9 +252,41 @@ export default function ContactModal({
             <X size={22} />
           </button>
 
+          <div className="md:hidden mb-6 pr-10">
+            <div className="flex items-center gap-3">
+                <div
+                    className="
+                        h-12
+                        w-12
+                        rounded-xl
+                        bg-gradient-to-br
+                        from-blue-700
+                        to-blue-900
+                        text-white
+                        flex
+                        items-center
+                        justify-center
+                        shadow-lg
+                    "
+                >
+                    <Mail size={22} />
+                </div>
+
+                <div>
+                    <h2 className="text-xl font-bold text-slate-800">
+                        Entre em Contato
+                    </h2>
+
+                    <p className="text-sm text-slate-500">
+                        Envie dúvidas, sugestões ou relate problemas.
+                    </p>
+                </div>
+            </div>
+        </div>
+
           {!success ? (
             <>
-              <h3 className="text-2xl font-bold text-slate-800 mb-1">
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-1">
                 Fale Conosco
               </h3>
 
@@ -516,7 +555,7 @@ export default function ContactModal({
                   />
 
                   <textarea
-                    rows="5"
+                    rows="4"
                     name="message"
                     value={
                       form.message
@@ -575,12 +614,13 @@ export default function ContactModal({
           ) : (
             <div
               className="
-                h-full
-                flex
-                flex-col
-                items-center
-                justify-center
-                text-center
+              min-h-[420px]
+              flex
+              flex-col
+              items-center
+              justify-center
+              text-center
+              py-10
               "
             >
               <CheckCircle2
