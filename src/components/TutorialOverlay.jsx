@@ -39,7 +39,7 @@ export default function TutorialOverlay({
       {
         selector: `[data-tour='sidebar${suffix}']`,
         title: "Menu lateral",
-        text: "Aqui ficam as principais ferramentas do mapa. Você pode acessar camadas, legendas, busca, medição, marcadores, impressão, limpar o mapa e ativar tela cheia.",
+        text: "Aqui ficam as principais ferramentas do mapa. Você pode acessar mapas, informações, busca, medição, marcadores, impressão, limpar o mapa e ativar tela cheia.",
         placement: isMobile ? "bottom" : "right",
         disableScroll: !isMobile,
         spotlightPadding: 0,
@@ -50,14 +50,14 @@ export default function TutorialOverlay({
       },
       {
         selector: `[data-tour='layers-button${suffix}']`,
-        title: "Camadas",
+        title: "Mapas",
         text: "Neste botão você acessa a lista de mapas temáticos disponíveis. Ao marcar uma camada, ela aparece sobre o mapa.",
         ...sidebarAdjustments,
       },
       {
         selector: `[data-tour='legend-button${suffix}']`,
-        title: "Legendas",
-        text: "Aqui ficam as informações das camadas ativas, incluindo descrição, categoria, subcategoria e prévia visual quando disponível.",
+        title: "Informações",
+        text: "Aqui ficam as informações dos mapas ativos, incluindo descrição, categoria, subcategoria e prévia visual quando disponível.",
         ...sidebarAdjustments,
       },
       {
@@ -74,8 +74,8 @@ export default function TutorialOverlay({
       },
       {
         selector: `[data-tour='bookmarks-button${suffix}']`,
-        title: "Marcadores",
-        text: "Aqui ficam as camadas favoritas. Você pode marcar camadas com estrela para acessá-las rapidamente depois.",
+        title: "Favoritos",
+        text: "Aqui ficam os mapas favoritos. Você pode marcar mapas com estrela para acessá-los rapidamente depois.",
         ...sidebarAdjustments,
       },
       {
@@ -87,7 +87,7 @@ export default function TutorialOverlay({
       {
         selector: `[data-tour='clear-button${suffix}']`,
         title: "Limpar mapa",
-        text: "Este botão remove as camadas ativas e limpa desenhos ou medições feitas no mapa.",
+        text: "Este botão remove os mapas ativos e limpa desenhos ou medições feitas no mapa.",
         ...sidebarAdjustments,
       },
       {
@@ -96,18 +96,13 @@ export default function TutorialOverlay({
         text: "Use este botão para expandir o sistema em tela cheia e aproveitar melhor a visualização do mapa.",
         ...sidebarAdjustments,
       },
-      /*
-       * Botões Flutuantes do Mapa (Fora da Sidebar)
-       * Estes não recebem sufixo. Ajustamos o placement para "top" no celular
-       * para que o card não cubra os botões.
-       */
       {
-        selector: "[data-tour='map-zoom-controls']",
-        title: "Controles de zoom",
-        text: "Estes botões permitem aproximar ou afastar o mapa rapidamente usando o zoom manual.",
+        selector: "[data-tour='map-controls']",
+        title: "Controles do mapa",
+        text: "Nesta área você encontra os principais controles do mapa, como zoom, localização, troca do mapa base e visualização da legenda.",
         placement: isMobile ? "top" : "left",
         disableScroll: true,
-        spotlightPadding: 6,
+        spotlightPadding: 8,
         spotlightOffsetX: 0,
         spotlightOffsetY: 0,
         cardOffsetX: isMobile ? 0 : -8,
@@ -165,7 +160,7 @@ export default function TutorialOverlay({
 
     if (isMobile) {
       return allSteps.filter(step => 
-        !step.selector.includes('map-zoom-controls') &&
+        !step.selector.includes('map-controls') &&
         !step.selector.includes('login-area') &&
         !step.selector.includes('contact-button') &&
         !step.selector.includes('about-button') &&

@@ -31,6 +31,7 @@ import {
   Image as ImageIcon,
   ZoomIn,
   ZoomOut,
+  Map,
 } from "lucide-react";
 
 import api from "../services/api";
@@ -360,15 +361,15 @@ export default function Sidebar({
       >
         <SidebarButton
           dataTour="layers-button"
-          tooltip="Camadas"
+          tooltip="Mapas"
           active={activePanel === "layers"}
           onClick={() => setActivePanel("layers")}
-          icon={<Layers size={20} />}
+          icon={<Map size={20} />}
         />
 
         <SidebarButton
           dataTour="legend-button"
-          tooltip="Legendas"
+          tooltip="Informações"
           active={activePanel === "legends"}
           onClick={() => setActivePanel("legends")}
           icon={<Info size={20} />}
@@ -393,7 +394,7 @@ export default function Sidebar({
 
         <SidebarButton
           dataTour="bookmarks-button"
-          tooltip="Marcadores"
+          tooltip="Favoritos"
           active={activePanel === "bookmarks"}
           onClick={() => setActivePanel("bookmarks")}
           icon={<Bookmark size={20} />}
@@ -469,12 +470,12 @@ export default function Sidebar({
                       border-white/10
                     "
                   >
-                    <Layers size={22} />
+                    <Map size={22} />
                   </div>
 
                   <div>
                     <h2 className="font-bold text-xl leading-none">
-                      Camadas
+                      Mapas
                     </h2>
 
                     <p className="text-xs text-blue-200 mt-1">
@@ -517,7 +518,7 @@ export default function Sidebar({
                   onChange={(event) =>
                     setSearch(event.target.value)
                   }
-                  placeholder="Pesquisar camadas..."
+                  placeholder="Pesquisar mapas..."
                   className="
                     w-full
                     rounded-2xl
@@ -650,13 +651,13 @@ export default function Sidebar({
                 <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-yellow-200 rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <Layers
+                      <Map
                         size={16}
                         className="text-amber-700"
                       />
 
                       <h3 className="font-bold text-sm text-amber-800">
-                        Camadas Ativas
+                        Mapas Ativos
                       </h3>
 
                       <span className="bg-amber-200 text-amber-900 text-xs px-2 py-0.5 rounded-full font-bold">
@@ -944,7 +945,7 @@ function MobileToolbar({
 
                 <MobileButton
                     dataTour="layers-button-mobile"
-                    icon={<Layers size={18} />}
+                    icon={<Map size={18} />}
                     active={activePanel === "layers"}
                     onClick={() => setActivePanel("layers")}
                 />
@@ -1132,8 +1133,8 @@ function LayerRow({
         "
         title={
           favorite
-            ? "Remover dos marcadores"
-            : "Adicionar aos marcadores"
+            ? "Remover dos favoritos"
+            : "Adicionar aos favoritos"
         }
       >
         <Star
@@ -1207,22 +1208,22 @@ function LegendPanel({ activeLayers = [] }) {
     <>
       <PanelHeader
         icon={<Info size={22} />}
-        title="Legendas"
-        subtitle="Simbologia e descrição das camadas ativas"
+        title="Informações"
+        subtitle="Simbologia e descrição dos mapas ativos"
         count={activeLayers.length}
       />
 
       <div className="flex-1 overflow-y-auto bg-slate-50 p-4">
         {activeLayers.length === 0 ? (
           <EmptyState
-            icon={<Layers size={30} />}
-            title="Nenhuma camada ativa"
-            text="Ative uma camada no painel de camadas para visualizar sua legenda aqui."
+            icon={<Map size={30} />}
+            title="Nenhum mapa ativo"
+            text="Ative um mapa no painel de mapas para visualizar sua legenda aqui."
           />
         ) : visibleLayers.length === 0 ? (
           <div className="rounded-2xl bg-white border border-slate-200 p-5 text-center">
             <p className="text-sm text-slate-500">
-              Todas as legendas foram ocultadas.
+              Todas as informações foram ocultadas.
             </p>
 
             <button
@@ -1251,7 +1252,7 @@ function LegendPanel({ activeLayers = [] }) {
                 onClick={() => setHiddenLayerIds([])}
                 className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 text-blue-700 text-sm font-bold hover:bg-blue-50 transition"
               >
-                Mostrar legendas ocultas
+                Mostrar informações ocultas
               </button>
             )}
           </div>
@@ -1379,8 +1380,8 @@ function BookmarksPanel({
     <>
       <PanelHeader
         icon={<Bookmark size={22} />}
-        title="Marcadores"
-        subtitle="Camadas favoritas para acesso rápido"
+        title="Favoritos"
+        subtitle="Mapas favoritos para acesso rápido"
         count={favoriteLayers.length}
       />
 
@@ -1393,8 +1394,8 @@ function BookmarksPanel({
                 fill="currentColor"
               />
             }
-            title="Nenhuma camada marcada"
-            text="Use a estrela ao lado das camadas para salvá-las aqui."
+            title="Nenhum mapa marcado"
+            text="Use a estrela ao lado dos mapas para salvá-los aqui."
             color="amber"
           />
         ) : (
@@ -1432,7 +1433,7 @@ function BookmarksPanel({
                         onToggleFavorite(layer.id)
                       }
                       className="h-8 w-8 rounded-xl bg-amber-50 text-amber-500 hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center shrink-0"
-                      title="Remover dos marcadores"
+                      title="Remover dos favoritos"
                     >
                       <Star
                         size={16}
@@ -1793,7 +1794,7 @@ function PrintPanel({
                   {item.layers?.length > 0 && (
                     <div className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">
                       <p className="text-[11px] font-black text-amber-800 uppercase">
-                        Camadas usadas
+                        Mapas usados
                       </p>
 
                       <p className="text-xs text-amber-900 mt-1 truncate">
@@ -1844,7 +1845,7 @@ function PrintPanel({
         {activeLayers.length > 0 && (
           <div className="mt-5 bg-amber-50 border border-amber-200 rounded-2xl p-4">
             <p className="text-xs font-black text-amber-800 uppercase">
-              Camadas no mapa agora
+              Mapas ativados agora
             </p>
 
             <div className="mt-3 space-y-2">

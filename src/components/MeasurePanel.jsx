@@ -162,7 +162,7 @@ export default function MeasurePanel({ mapToolsRef }) {
           </button>
         </div>
 
-        {/* NOVO: LISTA DE MEDIÇÕES */}
+        {/* LISTA DE MEDIÇÕES */}
         {measurements.length > 0 && (
           <div className="bg-white border border-slate-200 rounded-2xl p-3 md:p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
@@ -197,18 +197,28 @@ export default function MeasurePanel({ mapToolsRef }) {
                 </div>
               ))}
             </div>
-
-            {/* LIMPEZA TOTAL MOVIDA PARA DENTRO DA LISTA */}
-            <button
-              type="button"
-              onClick={() => mapToolsRef?.current?.clearDrawings?.()}
-              className="mt-3 w-full rounded-xl bg-red-50 border border-red-100 p-2.5 flex items-center justify-center gap-2 hover:bg-red-100 transition text-red-600 text-[13px] md:text-sm font-bold"
-            >
-              <Trash2 size={16} />
-              Apagar tudo
-            </button>
           </div>
         )}
+
+        {/* LIMPEZA TOTAL (Fora da condição, sempre aparece) */}
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => mapToolsRef?.current?.clearDrawings?.()}
+            className="w-full text-left rounded-2xl bg-red-50 border border-red-100 p-4 flex items-center justify-between hover:bg-red-100 transition group"
+          >
+            <div>
+              <h3 className="font-black text-red-700 text-[13px] md:text-sm">Limpar medições</h3>
+              <p className="text-xs text-red-500 mt-0.5">
+                Remove os desenhos do mapa
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center group-hover:bg-red-200 transition shrink-0">
+              <Trash2 size={18} className="text-red-600" />
+            </div>
+          </button>
+        </div>
+
       </div>
     </>
   );

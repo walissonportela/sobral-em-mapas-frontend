@@ -4,6 +4,7 @@ import {
   GeoJSON,
   WMSTileLayer,
   useMap,
+  Pane,
 } from "react-leaflet";
 
 import L from "leaflet";
@@ -24,6 +25,7 @@ import {
 } from "react";
 
 import PrintSelectionOverlay from "./PrintSelectionOverlay";
+import MapControls from "./MapControls";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
@@ -54,6 +56,19 @@ export default function Map({
       width: 560,
       height: 360,
     });
+
+  const [layerUrl, setLayerUrl] = useState("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
+  const [layerType, setLayerType] = useState("osm");
+
+  const handleLayerChange = (type) => {
+    setLayerType(type);
+    const urls = {
+      osm: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      topographic: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+    };
+    setLayerUrl(urls[type]);
+  };
 
   const mapShellRef = useRef(null);
   const drawLayerRef = useRef(null);
@@ -313,22 +328,30 @@ export default function Map({
           printTools={printTools}
         />
 
-        <MapZoomControls />
-
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          crossOrigin="anonymous"
+        <MapControls 
+          onLayerChange={handleLayerChange} 
+          currentLayer={layerType} 
         />
 
-        {activeLayers.map((layer) => {
-        
+        <Pane name="base-map" style={{ zIndex: 200 }}>
+          <TileLayer
+            url={layerUrl}
+            crossOrigin="anonymous"
+            attribution={
+              layerType === "osm"
+                ? "&copy; OpenStreetMap"
+                : "Esri, Maxar"
+            }
+          />
+        </Pane>
 
-          return (
+        <Pane name="wms-layers" style={{ zIndex: 450 }}>
+          {activeLayers.map((layer) => (
             <WMSTileLayer
               key={layer.id}
               url={`${API_BASE_URL}/proxy-wms`}
               layers={layer.layer_name}
-              transparent={true}
+              transparent
               format="image/png"
               version="1.1.1"
               crossOrigin="anonymous"
@@ -338,8 +361,8 @@ export default function Map({
                 ""
               }
             />
-          );
-        })}
+          ))}
+        </Pane>
 
         {sobralGeoJson && (
           <GeoJSON
