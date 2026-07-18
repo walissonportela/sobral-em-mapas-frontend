@@ -497,11 +497,22 @@ function MapToolsBridge({
         map.doubleClickZoom.enable();
       },
 
-      measureLine: () => {
+      measureLine: (options) => {
+        const color = options?.color || "#2563eb";
+        const weight = options?.width || 4;
+        const style = options?.style || "solid";
+        const opacity = options?.opacity ?? 1;
+
+        let dashArray = null;
+        if (style === "dashed") dashArray = "15, 10";
+        if (style === "dotted") dashArray = "3, 8";
+
         const drawer = new L.Draw.Polyline(map, {
           shapeOptions: {
-            color: "#2563eb",
-            weight: 4,
+            color: color,
+            weight: weight,
+            opacity: opacity, 
+            dashArray: dashArray,
           },
           metric: true,
           feet: false,
@@ -511,24 +522,34 @@ function MapToolsBridge({
         startDrawer(drawer);
       },
 
-      measureArea: () => {
+      measureArea: (options) => {
         configureLeafletDrawPtBr();
+
+        const color = options?.color || "#2563eb";
+        const weight = options?.width || 3;
+        const style = options?.style || "solid";
+        const opacity = options?.opacity ?? 1;
+        const fillOpacity = options?.fillOpacity ?? 0.18;
+
+        let dashArray = null;
+        if (style === "dashed") dashArray = "15, 10";
+        if (style === "dotted") dashArray = "3, 8";
 
         const drawer = new L.Draw.Polygon(map, {
           shapeOptions: {
-            color: "#2563eb",
-            weight: 3,
-            fillColor: "#2563eb",
-            fillOpacity: 0.18,
+            color: color,
+            weight: weight,
+            opacity: opacity,
+            dashArray: dashArray,
+            fillColor: color,
+            fillOpacity: fillOpacity,
           },
 
           allowIntersection: true,
           showArea: false,
-
           metric: true,
           feet: false,
           nautic: false,
-
           guidelineDistance: 12,
           zIndexOffset: 2000,
           repeatMode: false,

@@ -35,6 +35,7 @@ import {
 
 import api from "../services/api";
 import SearchPanel from "./SearchPanel";
+import MeasurePanel from "./MeasurePanel";
 
 import { jsPDF } from "jspdf";
 
@@ -1149,7 +1150,7 @@ function LayerRow({
   );
 }
 
-function PanelHeader({
+export function PanelHeader({
   icon,
   title,
   subtitle,
@@ -1365,105 +1366,6 @@ function LegendCard({ layer, onHide }) {
         )}
       </div>
     </div>
-  );
-}
-
-function MeasurePanel({ mapToolsRef }) {
-  return (
-    <>
-      <PanelHeader
-        icon={<Ruler size={22} />}
-        title="Medição"
-        subtitle="Meça distâncias e áreas no mapa"
-      />
-
-      <div className="flex-1 overflow-y-auto bg-slate-50 p-5">
-        <div className="space-y-4">
-          <button
-            type="button"
-            onClick={() =>
-              mapToolsRef?.current?.measureLine?.()
-            }
-            className="
-              w-full
-              rounded-2xl
-              bg-white
-              border
-              border-slate-200
-              p-4
-              text-left
-              hover:border-blue-200
-              hover:bg-blue-50
-              transition
-              shadow-sm
-            "
-          >
-            <h3 className="font-black text-slate-800">
-              Medir distância
-            </h3>
-
-            <p className="text-sm text-slate-500 mt-1">
-              Clique no mapa para desenhar uma linha e calcular o comprimento.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              mapToolsRef?.current?.measureArea?.()
-            }
-            className="
-              w-full
-              rounded-2xl
-              bg-white
-              border
-              border-slate-200
-              p-4
-              text-left
-              hover:border-blue-200
-              hover:bg-blue-50
-              transition
-              shadow-sm
-            "
-          >
-            <h3 className="font-black text-slate-800">
-              Medir área
-            </h3>
-
-            <p className="text-sm text-slate-500 mt-1">
-              Desenhe um polígono para calcular a área aproximada.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              mapToolsRef?.current?.clearDrawings?.()
-            }
-            className="
-              w-full
-              rounded-2xl
-              bg-red-50
-              border
-              border-red-100
-              p-4
-              text-left
-              hover:bg-red-100
-              transition
-            "
-          >
-            <h3 className="font-black text-red-700">
-              Limpar medições
-            </h3>
-
-            <p className="text-sm text-red-500 mt-1">
-              Remove todas as linhas e áreas medidas no mapa.
-            </p>
-          </button>
-
-        </div>
-      </div>
-    </>
   );
 }
 
