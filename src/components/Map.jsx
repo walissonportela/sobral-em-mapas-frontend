@@ -303,6 +303,7 @@ export default function Map({
         center={position}
         zoom={14}
         zoomControl={false}
+        preferCanvas={true}
         className="h-full w-full"
       >
         <MapToolsBridge
