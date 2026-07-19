@@ -72,6 +72,7 @@ export default function MapControls({ onLayerChange, currentLayer }) {
   return (
     <div 
       data-tour="map-controls" 
+      data-map-export-ignore="true"
       className="absolute top-4 right-4 z-[1000] flex flex-col gap-2"
       >
       <div className="flex flex-col rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white">

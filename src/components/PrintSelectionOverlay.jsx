@@ -16,6 +16,28 @@ export default function PrintSelectionOverlay({
   isExporting,
   containerRef,
 }) {
+
+  // Verifica se o armazenamento está cheio ao abrir o painel
+  useEffect(() => {
+    const checkStorageQuota = () => {
+      try {
+        // Tenta gravar um dado temporário minúsculo para testar se há espaço
+        localStorage.setItem('__test_quota__', 'test');
+        localStorage.removeItem('__test_quota__');
+      } catch (e) {
+        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+          alert(
+            "Memória de impressão cheia! \n\n" +
+            "Para continuar exportando, por favor, recarregue a página (F5) " +
+            "ou limpe o histórico de impressões no painel lateral."
+          );
+        }
+      }
+    };
+
+    checkStorageQuota();
+  }, []);
+  
   const [dragState, setDragState] = useState(null);
 
   const [containerSize, setContainerSize] = useState({

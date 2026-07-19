@@ -1491,10 +1491,14 @@ function PrintPanel({
   );
 
   useEffect(() => {
-    localStorage.setItem(
-      historyStorageKey,
-      JSON.stringify(printHistory)
-    );
+    try {
+        localStorage.setItem(
+        historyStorageKey,
+        JSON.stringify(printHistory)
+      );
+    } catch (error) {
+      console.error("Erro ao salvar histórico:", error);
+    }
   }, [historyStorageKey, printHistory]);
 
   useEffect(() => {
