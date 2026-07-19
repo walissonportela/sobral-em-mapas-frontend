@@ -2,15 +2,23 @@ import { Ruler, Trash2, Palette, Scaling, Settings2, Eye, Droplet, List } from "
 import { useState, useEffect } from "react";
 import { PanelHeader } from "./Sidebar"; 
 
+// NOVA FUNÇÃO: Converte HEX (#2563eb) para RGB (rgb(37, 99, 235))
+const hexToRgb = (hex) => {
+  const cleanHex = hex.replace(/^#/, '');
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  return `rgb(${r}, ${g}, ${b})`;
+};
+
 export default function MeasurePanel({ mapToolsRef }) {
   const [lineColor, setLineColor] = useState("#2563eb");
   const [lineWidth, setLineWidth] = useState(3);
   const [lineStyle, setLineStyle] = useState("solid");
   const [lineOpacity, setLineOpacity] = useState(100); 
-  const [fillOpacity, setFillOpacity] = useState(18); // NOVO: Controle de preenchimento
-  const [measurements, setMeasurements] = useState([]); // NOVO: Lista de desenhos
+  const [fillOpacity, setFillOpacity] = useState(18); 
+  const [measurements, setMeasurements] = useState([]); 
 
-  // Escuta as alterações nos desenhos do mapa
   useEffect(() => {
     const handleMeasurements = (event) => {
       setMeasurements(event.detail || []);
@@ -21,7 +29,7 @@ export default function MeasurePanel({ mapToolsRef }) {
 
   const handleMeasureLine = () => {
     mapToolsRef?.current?.measureLine?.({
-      color: lineColor,
+      color: hexToRgb(lineColor), 
       width: lineWidth,
       style: lineStyle,
       opacity: lineOpacity / 100,
@@ -30,11 +38,11 @@ export default function MeasurePanel({ mapToolsRef }) {
 
   const handleMeasureArea = () => {
     mapToolsRef?.current?.measureArea?.({
-      color: lineColor,
+      color: hexToRgb(lineColor), 
       width: lineWidth,
       style: lineStyle,
       opacity: lineOpacity / 100,
-      fillOpacity: fillOpacity / 100, // Repassando o fundo
+      fillOpacity: fillOpacity / 100, 
     });
   };
 
@@ -46,7 +54,6 @@ export default function MeasurePanel({ mapToolsRef }) {
         subtitle="Meça distâncias e áreas no mapa"
       />
 
-      {/* Ajuste responsivo: p-4 no mobile, p-5 no desktop, gap ajustado */}
       <div className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-5 space-y-4 md:space-y-6">
         
         {/* CONFIGURAÇÕES VISUAIS */}
@@ -63,7 +70,6 @@ export default function MeasurePanel({ mapToolsRef }) {
                 <Palette size={16} className="text-slate-400" />
                 Cor principal
               </label>
-              {/* Área de toque maior (h-10) para mobile */}
               <input
                 type="color"
                 value={lineColor}
@@ -105,7 +111,7 @@ export default function MeasurePanel({ mapToolsRef }) {
               />
             </div>
 
-            {/* NOVO: Opacidade do Fundo */}
+            {/* Opacidade do Fundo */}
             <div className="space-y-1">
               <label className="flex items-center gap-2 text-[13px] md:text-sm font-medium text-slate-600">
                 <Droplet size={16} className="text-slate-400" />
@@ -200,7 +206,7 @@ export default function MeasurePanel({ mapToolsRef }) {
           </div>
         )}
 
-        {/* LIMPEZA TOTAL (Fora da condição, sempre aparece) */}
+        {/* LIMPEZA TOTAL */}
         <div className="pt-2">
           <button
             type="button"
