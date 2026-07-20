@@ -8,7 +8,7 @@ import {
 } from "react-leaflet";
 
 import L from "leaflet";
-import html2canvas from "html2canvas";
+import domtoimage from "dom-to-image-more";
 import { jsPDF } from "jspdf";
 
 import "leaflet/dist/leaflet.css";
@@ -135,40 +135,26 @@ export default function Map({
         const shellRect =
           shell.getBoundingClientRect();
 
-        const canvas = await html2canvas(mapElement, {
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: "#ffffff",
-          scale: 2,
-          logging: false,
-          foreignObjectRendering: false,
-
-          ignoreElements: (element) => {
-            return Boolean(
-              element.closest?.(
-                "[data-print-overlay='true']"
-              ) ||
-                element.closest?.(
-                  "[data-map-export-ignore='true']"
-                ) ||
-                element.closest?.(
-                  ".leaflet-control-container"
-                )
-            );
+        // GERAÇÃO DA IMAGEM COM DOM-TO-IMAGE-MORE
+        const scale = 2;
+        const canvas = await domtoimage.toCanvas(mapElement, {
+          bgcolor: "#ffffff",
+          width: mapElement.clientWidth * scale,
+          height: mapElement.clientHeight * scale,
+          style: {
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
           },
+          filter: (node) => {
+            // Proteção para nós de texto (que não têm dataset ou classList)
+            if (node.nodeType !== 1) return true;
 
-          onclone: (clonedDocument) => {
-            clonedDocument
-              .querySelectorAll(
-                [
-                  "[data-print-overlay='true']",
-                  "[data-map-export-ignore='true']",
-                  ".leaflet-control-container",
-                ].join(",")
-              )
-              .forEach((element) => {
-                element.remove();
-              });
+            // Ignora a interface para não sair na foto e evitar erros de CSS
+            if (node.dataset?.printOverlay === "true") return false;
+            if (node.dataset?.mapExportIgnore === "true") return false;
+            if (node.classList?.contains("leaflet-control-container")) return false;
+            
+            return true;
           },
         });
 
@@ -721,53 +707,49 @@ function getPolygonArea(layer) {
   return L.GeometryUtil.geodesicArea(mainRing);
 }
 
+function getCurrentTimestampFilename() {
+  return getFormattedLocalDateTime("sobral-em-mapas");
+}
+
+
+// Função auxiliar universal que pega o horário local
+function getFormattedLocalDateTime(prefix, dateObj = new Date()) {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  const hours = String(dateObj.getHours()).padStart(2, "0");
+  const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+
+  return `${prefix}-${year}-${month}-${day}-${hours}-${minutes}`;
+}
+
 function exportCanvasAsImage(canvas, format) {
   return new Promise((resolve, reject) => {
     const isJpeg = format === "jpeg";
-
-    const outputCanvas =
-      document.createElement("canvas");
+    const outputCanvas = document.createElement("canvas");
 
     outputCanvas.width = canvas.width;
     outputCanvas.height = canvas.height;
-
-    const context =
-      outputCanvas.getContext("2d");
+    const context = outputCanvas.getContext("2d");
 
     if (isJpeg) {
       context.fillStyle = "#ffffff";
-      context.fillRect(
-        0,
-        0,
-        outputCanvas.width,
-        outputCanvas.height
-      );
+      context.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
     }
 
     context.drawImage(canvas, 0, 0);
 
-    const mimeType = isJpeg
-      ? "image/jpeg"
-      : "image/png";
-
+    const mimeType = isJpeg ? "image/jpeg" : "image/png";
     const extension = isJpeg ? "jpg" : "png";
+    const filename = getCurrentTimestampFilename(); 
 
     outputCanvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(
-            new Error(
-              "Não foi possível gerar a imagem."
-            )
-          );
+          reject(new Error("Não foi possível gerar a imagem."));
           return;
         }
-
-        downloadBlob(
-          blob,
-          `sobral-em-mapas.${extension}`
-        );
-
+        downloadBlob(blob, `${filename}.${extension}`);
         resolve();
       },
       mimeType,
@@ -777,35 +759,21 @@ function exportCanvasAsImage(canvas, format) {
 }
 
 function exportCanvasAsPdf(canvas) {
-  const imageData = canvas.toDataURL(
-    "image/jpeg",
-    0.95
-  );
-
-  const orientation =
-    canvas.width >= canvas.height
-      ? "landscape"
-      : "portrait";
-
+  const imageData = canvas.toDataURL("image/jpeg", 0.95);
+  const orientation = canvas.width >= canvas.height ? "landscape" : "portrait";
+  
   const pdf = new jsPDF({
     orientation,
     unit: "mm",
     format: "a4",
   });
 
-  const pageWidth =
-    pdf.internal.pageSize.getWidth();
-
-  const pageHeight =
-    pdf.internal.pageSize.getHeight();
-
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 10;
-
   const maxWidth = pageWidth - margin * 2;
   const maxHeight = pageHeight - margin * 2;
-
-  const imageRatio =
-    canvas.width / canvas.height;
+  const imageRatio = canvas.width / canvas.height;
 
   let imageWidth = maxWidth;
   let imageHeight = imageWidth / imageRatio;
@@ -818,18 +786,11 @@ function exportCanvasAsPdf(canvas) {
   const x = (pageWidth - imageWidth) / 2;
   const y = (pageHeight - imageHeight) / 2;
 
-  pdf.addImage(
-    imageData,
-    "JPEG",
-    x,
-    y,
-    imageWidth,
-    imageHeight
-  );
-
-  pdf.save("sobral-em-mapas.pdf");
+  pdf.addImage(imageData, "JPEG", x, y, imageWidth, imageHeight);
+  
+  const filename = getCurrentTimestampFilename(); // 
+  pdf.save(`${filename}.pdf`);
 }
-
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
 
