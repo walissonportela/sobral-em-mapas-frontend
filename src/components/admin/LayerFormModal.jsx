@@ -1,39 +1,34 @@
-import { useMemo, useState } from "react";
+// Sobral em Mapas — modal de criação/edição de camadas.
+// Compatível com o contrato atual de POST/PUT /api/admin/layers.
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  X,
-  Layers,
-  Loader2,
-  Save,
-  Map,
-  FileText,
-  Link as LinkIcon,
-  Search,
-  Wand2,
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
   Eye,
   EyeOff,
-  RotateCcw,
-  AlertTriangle,
-  CheckCircle2,
+  Globe2,
+  Layers,
+  Link2,
+  Loader2,
+  MapPinned,
+  Save,
+  Search,
+  Settings2,
+  X,
 } from "lucide-react";
-
-import {
-  MapContainer,
-  TileLayer,
-  WMSTileLayer,
-} from "react-leaflet";
-
+import { MapContainer, TileLayer, WMSTileLayer } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-
 import { getAvailableWmsLayers } from "../../services/layerService";
 
 const API_BASE_URL = (
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:8080/api"
+  import.meta.env.VITE_API_URL || "http://localhost:8080/api"
 ).replace(/\/$/, "");
-
 const PROXY_WMS_URL = `${API_BASE_URL}/proxy-wms`;
-
 const SOBRAL_CENTER = [-3.6892, -40.3489];
+
+const inputClass =
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100";
 
 export default function LayerFormModal({
   layer,
@@ -43,1018 +38,536 @@ export default function LayerFormModal({
   onClose,
   onSubmit,
 }) {
-  const [form, setForm] = useState(() =>
-    getInitialForm(layer)
+  const isEditing = Boolean(layer);
+  const [form, setForm] = useState(() => getInitialForm(layer));
+  const [availableLayers, setAvailableLayers] = useState([]);
+  const [loadingWmsLayers, setLoadingWmsLayers] = useState(false);
+  const [wmsError, setWmsError] = useState("");
+  const [wmsSearch, setWmsSearch] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onEscape = (event) => {
+      if (event.key === "Escape" && !loading) onClose?.();
+    };
+    document.addEventListener("keydown", onEscape);
+    return () => document.removeEventListener("keydown", onEscape);
+  }, [loading, onClose]);
+
+  const selectedWmsLink = useMemo(
+    () =>
+      wmsLinks.find((item) => String(item.id) === String(form.wms_link_id)) ||
+      null,
+    [wmsLinks, form.wms_link_id]
   );
 
-  const [availableLayers, setAvailableLayers] =
-    useState([]);
-
-  const [loadingWmsLayers, setLoadingWmsLayers] =
-    useState(false);
-
-  const [wmsSearch, setWmsSearch] = useState("");
-  const [wmsError, setWmsError] = useState("");
-
-  const [previewConfig, setPreviewConfig] =
-    useState(null);
-
-  const [previewError, setPreviewError] =
-    useState("");
-
-  const [previewLoading, setPreviewLoading] =
-    useState(false);
-
-  const isEditing = Boolean(layer);
-
-  const selectedWmsLink = useMemo(() => {
-    return (
-      wmsLinks.find(
-        (item) =>
-          String(item.id) ===
-          String(form.wms_link_id)
-      ) || null
+  const filteredAvailableLayers = useMemo(() => {
+    const term = wmsSearch.trim().toLowerCase();
+    if (!term) return availableLayers;
+    return availableLayers.filter((item) =>
+      [item.name, item.title, removeWorkspacePrefix(item.name)]
+        .some((value) => String(value || "").toLowerCase().includes(term))
     );
-  }, [wmsLinks, form.wms_link_id]);
+  }, [availableLayers, wmsSearch]);
 
-  const filteredAvailableLayers =
-    availableLayers.filter((item) => {
-      const searchText = wmsSearch
-        .trim()
-        .toLowerCase();
+  const canSave =
+    !loading &&
+    form.name.trim().length > 0 &&
+    normalizeTechnicalName(form.layer_name).length > 0 &&
+    form.subcategory !== "";
 
-      if (!searchText) return true;
-
-      return (
-        item.name
-          ?.toLowerCase()
-          .includes(searchText) ||
-        item.title
-          ?.toLowerCase()
-          .includes(searchText) ||
-        removeWorkspacePrefix(item.name)
-          .toLowerCase()
-          .includes(searchText)
-      );
-    });
-
-  const handleChange = (field, value) => {
-    setForm((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
-
-    if (
-      field === "layer_name" ||
-      field === "wms_link_id"
-    ) {
-      setPreviewConfig(null);
-      setPreviewError("");
-    }
+  const change = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === "layer_name") clearPreview();
   };
 
-  const handleFetchWmsLayers = async () => {
-    if (!form.wms_link_id) {
-      setWmsError(
-        "Selecione um link WMS antes de buscar as layers."
-      );
-      return;
-    }
-
-    try {
-      setLoadingWmsLayers(true);
-      setWmsError("");
-
-      const response = await getAvailableWmsLayers(
-        form.wms_link_id
-      );
-
-      const layers = response.layers || [];
-
-      setAvailableLayers(layers);
-
-      if (layers.length === 0) {
-        setWmsError(
-          "Nenhuma layer foi encontrada nesse WMS."
-        );
-      }
-    } catch (requestError) {
-      console.error(
-        "Erro ao buscar layers do WMS:",
-        requestError
-      );
-
-      setWmsError(
-        requestError.response?.data?.message ||
-          requestError.response?.data?.error ||
-          "Não foi possível buscar as layers desse WMS."
-      );
-    } finally {
-      setLoadingWmsLayers(false);
-    }
-  };
-
-  const handleSelectAvailableLayer = (wmsLayer) => {
-    const originalTechnicalName = wmsLayer.name || "";
-
-    const technicalName = removeWorkspacePrefix(
-      originalTechnicalName
-    );
-
-    const displayName = getFriendlyLayerName(
-      wmsLayer.title,
-      technicalName
-    );
-
-    setForm((previous) => ({
-      ...previous,
-      name: displayName || previous.name,
-      layer_name: technicalName || previous.layer_name,
-      crs:
-        wmsLayer.crs ||
-        previous.crs ||
-        "EPSG:4326",
-      legend_url:
-        wmsLayer.legend_url ||
-        previous.legend_url ||
-        "",
-      description:
-        wmsLayer.abstract ||
-        previous.description ||
-        "",
-      type: "WMS",
-    }));
-
-    setPreviewConfig(null);
-    setPreviewError("");
-  };
-
-  const handlePreview = () => {
-    if (!form.layer_name.trim()) {
-      setPreviewError(
-        "Informe o nome técnico da camada antes de pré-visualizar."
-      );
-      return;
-    }
-
-    setPreviewError("");
-    setPreviewLoading(true);
-
-    setPreviewConfig({
-      key: `${form.layer_name}-${form.wms_link_id}-${Date.now()}`,
-      layerName: form.layer_name.trim(),
-      wmsLinkId: form.wms_link_id || "",
-      version:
-        selectedWmsLink?.version || "1.1.1",
-    });
-  };
-
-  const handleClearPreview = () => {
-    setPreviewConfig(null);
+  const clearPreview = () => {
+    setPreview(null);
     setPreviewError("");
     setPreviewLoading(false);
   };
 
+  const changeWmsLink = (value) => {
+    requestIdRef.current += 1;
+    setForm((prev) => ({ ...prev, wms_link_id: value }));
+    setAvailableLayers([]);
+    setWmsSearch("");
+    setWmsError("");
+    setLoadingWmsLayers(false);
+    clearPreview();
+  };
+
+  const fetchWmsLayers = async () => {
+    if (!form.wms_link_id) return;
+    const requestId = ++requestIdRef.current;
+    setLoadingWmsLayers(true);
+    setWmsError("");
+    setAvailableLayers([]);
+
+    try {
+      const response = await getAvailableWmsLayers(form.wms_link_id);
+      if (requestId !== requestIdRef.current) return;
+      const found = Array.isArray(response.layers) ? response.layers : [];
+      setAvailableLayers(found);
+      if (!found.length) {
+        setWmsError("Nenhuma camada foi encontrada neste serviço WMS.");
+      }
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+      setWmsError(
+        error.response?.data?.message ||
+          error.response?.data?.error ||
+          "Não foi possível consultar o serviço WMS. Verifique o link cadastrado."
+      );
+    } finally {
+      if (requestId === requestIdRef.current) setLoadingWmsLayers(false);
+    }
+  };
+
+  const startPreview = (technicalName, wmsLinkId = form.wms_link_id) => {
+    const normalizedName = normalizeTechnicalName(technicalName);
+
+    if (!normalizedName) {
+      setPreviewError("Informe ou selecione uma camada antes de visualizar.");
+      return;
+    }
+
+    const wmsLink = wmsLinks.find((item) => String(item.id) === String(wmsLinkId));
+    setPreviewError("");
+    setPreviewLoading(true);
+    setPreview({
+      key: `${normalizedName}-${wmsLinkId}-${Date.now()}`,
+      layerName: normalizedName,
+      wmsLinkId: wmsLinkId || "",
+      version: wmsLink?.version || "1.1.1",
+    });
+  };
+
+  const selectAvailableLayer = (item) => {
+    const technicalName = normalizeTechnicalName(item.name);
+    setForm((prev) => ({
+      ...prev,
+      name: getFriendlyLayerName(item.title, technicalName) || prev.name,
+      layer_name: technicalName || prev.layer_name,
+      crs: item.crs || prev.crs || "EPSG:4326",
+      legend_url: item.legend_url || "",
+      description: item.abstract || prev.description,
+      type: "WMS",
+    }));
+    // A escolha no GetCapabilities já atualiza automaticamente o mapa à direita.
+    startPreview(technicalName);
+  };
+
+  const handlePreview = () => startPreview(form.layer_name);
+
   const handleSubmit = (event) => {
     event.preventDefault();
+    if (!canSave) return;
 
-    onSubmit({
+    onSubmit?.({
       name: form.name.trim(),
-      layer_name: form.layer_name.trim(),
+      // O GeoServer utilizado neste projeto trabalha com o nome sem workspace.
+      layer_name: normalizeTechnicalName(form.layer_name),
       crs: form.crs.trim() || "EPSG:4326",
       legend_url: form.legend_url.trim() || null,
       type: form.type || "WMS",
-      description:
-        form.description.trim() || null,
-      order:
-        form.order === ""
-          ? 0
-          : Number(form.order),
-      subcategory:
-        form.subcategory === ""
-          ? null
-          : Number(form.subcategory),
-      image_path:
-        form.image_path.trim() || null,
-      max_scale:
-        form.max_scale === ""
-          ? null
-          : Number(form.max_scale),
-      symbol: form.symbol.trim() || null,
-      wms_link_id:
-        form.wms_link_id === ""
-          ? null
-          : Number(form.wms_link_id),
+      description: form.description.trim() || null,
+      order: form.order === "" ? 0 : Number(form.order),
+      subcategory: Number(form.subcategory),
+      max_scale: form.max_scale === "" ? null : Number(form.max_scale),
+      wms_link_id: form.wms_link_id === "" ? null : Number(form.wms_link_id),
       isPublic: Boolean(form.isPublic),
+      // A interface não exibe estes campos, mas preserva os valores ao editar.
+      image_path: form.image_path.trim() || null,
+      symbol: form.symbol.trim() || null,
     });
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-7xl max-h-[92vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
-              <Layers size={24} />
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/65 p-2 backdrop-blur-sm sm:p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="layer-modal-title"
+        className="flex max-h-[96dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[92dvh] sm:rounded-3xl"
+      >
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-7">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+              <Layers size={21} />
             </div>
-
-            <div>
-              <h2 className="text-xl font-black text-slate-800">
-                {isEditing
-                  ? "Editar camada"
-                  : "Nova camada"}
+            <div className="min-w-0">
+              <h2 id="layer-modal-title" className="text-lg font-bold text-slate-900 sm:text-xl">
+                {isEditing ? "Editar camada" : "Cadastrar camada"}
               </h2>
-
-              <p className="text-sm text-slate-500">
-                Configure, busque no WMS e pré-visualize antes de salvar.
+              <p className="text-xs text-slate-500 sm:text-sm">
+                Escolha a fonte, organize os dados e confira no mapa.
               </p>
             </div>
           </div>
-
           <button
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="h-10 w-10 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition disabled:opacity-50 flex items-center justify-center shrink-0"
-            aria-label="Fechar"
+            aria-label="Fechar formulário"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-slate-200 disabled:opacity-50"
           >
             <X size={20} />
           </button>
-        </div>
+        </header>
 
-        <form
-          onSubmit={handleSubmit}
-          className="p-6 space-y-6 overflow-y-auto"
-        >
-          <section className="rounded-3xl border border-blue-100 bg-blue-50/50 p-5">
-            <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Wand2
-                    size={18}
-                    className="text-blue-700"
-                  />
-
-                  <h3 className="font-black text-slate-800">
-                    Buscar layers disponíveis no WMS
-                  </h3>
-                </div>
-
-                <p className="text-sm text-slate-500 mt-1">
-                  Escolha um link WMS, busque as camadas disponíveis e clique em uma delas para preencher o formulário.
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+            <div className="space-y-6 p-5 sm:p-7">
+              <section aria-labelledby="wms-section-title">
+                <SectionTitle number="1" icon={<Link2 size={18} />} title="Fonte cartográfica" id="wms-section-title" />
+                <p className="mb-4 text-sm text-slate-500">
+                  Selecione um serviço WMS e busque suas camadas. Ao escolher uma delas, os campos e a prévia serão preenchidos automaticamente. Também é possível cadastrar manualmente.
                 </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleFetchWmsLayers}
-                disabled={
-                  loading ||
-                  loadingWmsLayers ||
-                  !form.wms_link_id
-                }
-                className="px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
-              >
-                {loadingWmsLayers ? (
-                  <>
-                    <Loader2
-                      size={18}
-                      className="animate-spin"
-                    />
-                    Buscando...
-                  </>
-                ) : (
-                  <>
-                    <Search size={18} />
-                    Buscar layers
-                  </>
-                )}
-              </button>
-            </div>
-
-            {wmsError && (
-              <div className="mb-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 p-4 text-sm">
-                {wmsError}
-              </div>
-            )}
-
-            {availableLayers.length > 0 && (
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search
-                    size={17}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-
-                  <input
-                    type="text"
-                    value={wmsSearch}
-                    onChange={(event) =>
-                      setWmsSearch(event.target.value)
-                    }
-                    placeholder="Filtrar layers encontradas..."
-                    className="
-                      w-full
-                      pl-11
-                      pr-4
-                      py-3
-                      rounded-2xl
-                      border
-                      border-slate-200
-                      outline-none
-                      focus:border-blue-500
-                      focus:ring-4
-                      focus:ring-blue-100
-                      transition
-                    "
-                  />
-                </div>
-
-                <div className="max-h-64 overflow-y-auto rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
-                  {filteredAvailableLayers.map(
-                    (item) => {
-                      const cleanTechnicalName =
-                        removeWorkspacePrefix(
-                          item.name
-                        );
-
-                      const isSelected =
-                        cleanTechnicalName ===
-                        form.layer_name;
-
-                      return (
-                        <button
-                          key={item.name}
-                          type="button"
-                          onClick={() =>
-                            handleSelectAvailableLayer(
-                              item
-                            )
-                          }
-                          className={`
-                            w-full
-                            text-left
-                            p-4
-                            transition
-                            ${
-                              isSelected
-                                ? "bg-blue-50"
-                                : "hover:bg-blue-50"
-                            }
-                          `}
-                        >
-                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                            <div>
-                              <p className="font-black text-slate-800">
-                                {getFriendlyLayerName(
-                                  item.title,
-                                  cleanTechnicalName
-                                )}
-                              </p>
-
-                              <p className="text-xs text-blue-700 font-semibold mt-1">
-                                Original WMS: {item.name}
-                              </p>
-
-                              <p className="text-xs text-green-700 font-black mt-1">
-                                Será salvo como:{" "}
-                                {cleanTechnicalName}
-                              </p>
-                            </div>
-
-                            {isSelected && (
-                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-black">
-                                <CheckCircle2
-                                  size={13}
-                                />
-                                Selecionada
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {item.crs && (
-                              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
-                                {item.crs}
-                              </span>
-                            )}
-
-                            {item.legend_url && (
-                              <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold">
-                                Legenda disponível
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    }
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
-
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <Map
-                size={18}
-                className="text-blue-700"
-              />
-
-              <h3 className="font-black text-slate-800">
-                Identificação
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <FormField label="Nome da camada">
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(event) =>
-                    handleChange(
-                      "name",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  required
-                  autoFocus
-                  placeholder="Ex: Praças, Escolas, Bares..."
-                  className={inputClass}
-                />
-
-                <HelpText>
-                  Esse é o nome que aparece para o usuário no sistema.
-                </HelpText>
-              </FormField>
-
-              <FormField label="Nome técnico da camada">
-                <input
-                  type="text"
-                  value={form.layer_name}
-                  onChange={(event) =>
-                    handleChange(
-                      "layer_name",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  required
-                  placeholder="Ex: bar_map"
-                  className={inputClass}
-                />
-
-                <HelpText>
-                  No seu projeto, salve sem o prefixo do workspace. Exemplo: use bar_map, não Ceara:bar_map.
-                </HelpText>
-              </FormField>
-
-              <FormField label="Tipo">
-                <select
-                  value={form.type}
-                  onChange={(event) =>
-                    handleChange(
-                      "type",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  className={inputClass}
-                >
-                  <option value="WMS">WMS</option>
-                  <option value="GeoJSON">
-                    GeoJSON
-                  </option>
-                  <option value="Raster">
-                    Raster
-                  </option>
-                </select>
-              </FormField>
-
-              <FormField label="CRS">
-                <input
-                  type="text"
-                  value={form.crs}
-                  onChange={(event) =>
-                    handleChange(
-                      "crs",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  placeholder="EPSG:4326"
-                  className={inputClass}
-                />
-              </FormField>
-
-              <FormField label="Ordem">
-                <input
-                  type="number"
-                  value={form.order}
-                  onChange={(event) =>
-                    handleChange(
-                      "order",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  placeholder="0"
-                  className={inputClass}
-                />
-              </FormField>
-
-              <FormField label="Escala máxima">
-                <input
-                  type="number"
-                  step="any"
-                  value={form.max_scale}
-                  onChange={(event) =>
-                    handleChange(
-                      "max_scale",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  placeholder="Opcional"
-                  className={inputClass}
-                />
-              </FormField>
-            </div>
-          </section>
-
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <LinkIcon
-                size={18}
-                className="text-blue-700"
-              />
-
-              <h3 className="font-black text-slate-800">
-                Agrupamento e WMS
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <FormField label="Subcategoria">
-                <select
-                  value={form.subcategory}
-                  onChange={(event) =>
-                    handleChange(
-                      "subcategory",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  className={inputClass}
-                >
-                  <option value="">
-                    Sem subcategoria
-                  </option>
-
-                  {subcategories.map(
-                    (subcategory) => (
-                      <option
-                        key={subcategory.id}
-                        value={subcategory.id}
-                      >
-                        {getSubcategoryLabel(
-                          subcategory
-                        )}
-                      </option>
-                    )
-                  )}
-                </select>
-              </FormField>
-
-              <FormField label="Link WMS">
-                <select
-                  value={form.wms_link_id}
-                  onChange={(event) => {
-                    handleChange(
-                      "wms_link_id",
-                      event.target.value
-                    );
-
-                    setAvailableLayers([]);
-                    setWmsError("");
-                    setWmsSearch("");
-                    setPreviewConfig(null);
-                    setPreviewError("");
-                  }}
-                  disabled={loading}
-                  className={inputClass}
-                >
-                  <option value="">
-                    Nenhum link WMS
-                  </option>
-
-                  {wmsLinks.map((wmsLink) => (
-                    <option
-                      key={wmsLink.id}
-                      value={wmsLink.id}
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                  <Field label="Serviço WMS" htmlFor="layer-wms">
+                    <select
+                      id="layer-wms"
+                      value={form.wms_link_id}
+                      onChange={(e) => changeWmsLink(e.target.value)}
+                      disabled={loading}
+                      className={inputClass}
                     >
-                      {getWmsLabel(wmsLink)}
-                    </option>
-                  ))}
-                </select>
+                      <option value="">Fonte padrão / sem vínculo WMS</option>
+                      {wmsLinks.map((item) => (
+                        <option key={item.id} value={item.id}>{getWmsLabel(item)}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <button
+                    type="button"
+                    onClick={fetchWmsLayers}
+                    disabled={loading || loadingWmsLayers || !form.wms_link_id}
+                    className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {loadingWmsLayers ? <Loader2 size={17} className="animate-spin" /> : <Search size={17} />}
+                    {loadingWmsLayers ? "Buscando..." : "Buscar camadas"}
+                  </button>
+                </div>
 
-                {selectedWmsLink && (
-                  <HelpText>
-                    URL: {selectedWmsLink.url}
-                  </HelpText>
+                {selectedWmsLink?.url && (
+                  <p className="mt-2 break-all text-xs text-slate-500">Origem: {selectedWmsLink.url}</p>
                 )}
-              </FormField>
+                {wmsError && <Feedback tone="error">{wmsError}</Feedback>}
 
-              <FormField label="URL da legenda">
-                <input
-                  type="text"
-                  value={form.legend_url}
-                  onChange={(event) =>
-                    handleChange(
-                      "legend_url",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  placeholder="https://..."
-                  className={inputClass}
-                />
-              </FormField>
-
-              <FormField label="Caminho da imagem">
-                <input
-                  type="text"
-                  value={form.image_path}
-                  onChange={(event) =>
-                    handleChange(
-                      "image_path",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  placeholder="Opcional"
-                  className={inputClass}
-                />
-              </FormField>
-
-              <FormField label="Símbolo">
-                <input
-                  type="text"
-                  value={form.symbol}
-                  onChange={(event) =>
-                    handleChange(
-                      "symbol",
-                      event.target.value
-                    )
-                  }
-                  disabled={loading}
-                  placeholder="Opcional"
-                  className={inputClass}
-                />
-              </FormField>
-
-              <div className="flex items-end">
-                <label className="w-full flex items-center justify-between gap-4 p-4 rounded-2xl border border-slate-200 bg-slate-50 cursor-pointer">
-                  <div>
-                    <p className="font-bold text-slate-700">
-                      Camada pública
-                    </p>
-
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Quando pública, poderá aparecer no mapa.
-                    </p>
+                {availableLayers.length > 0 && (
+                  <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+                    <div className="border-b border-slate-100 bg-slate-50 p-3">
+                      <div className="flex items-center justify-between gap-2 pb-2">
+                        <span className="text-xs font-semibold text-slate-700">
+                          {availableLayers.length} camada(s) encontrada(s)
+                        </span>
+                        <span className="text-xs text-slate-500">Selecione uma para preencher</span>
+                      </div>
+                      <div className="relative">
+                        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="search"
+                          value={wmsSearch}
+                          onChange={(e) => setWmsSearch(e.target.value)}
+                          placeholder="Filtrar pelo nome..."
+                          aria-label="Filtrar camadas WMS"
+                          className={`${inputClass} pl-9`}
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-48 divide-y divide-slate-100 overflow-y-auto">
+                      {filteredAvailableLayers.length === 0 ? (
+                        <p className="p-4 text-sm text-slate-500">Nenhuma camada corresponde à busca.</p>
+                      ) : (
+                        filteredAvailableLayers.map((item) => {
+                          const technical = removeWorkspacePrefix(item.name);
+                          const selected = technical === form.layer_name;
+                          return (
+                            <button
+                              key={item.name}
+                              type="button"
+                              disabled={loading}
+                              onClick={() => selectAvailableLayer(item)}
+                              className={`flex w-full items-center justify-between gap-3 p-3 text-left transition hover:bg-blue-50 disabled:opacity-50 ${selected ? "bg-blue-50" : "bg-white"}`}
+                            >
+                              <span className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800">
+                                  {getFriendlyLayerName(item.title, technical)}
+                                </span>
+                                <span className="block break-all text-xs text-slate-500">{item.name}</span>
+                              </span>
+                              {selected && <CheckCircle2 size={19} className="shrink-0 text-green-600" aria-label="Camada selecionada" />}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
+                )}
+              </section>
 
+              <section aria-labelledby="details-section-title">
+                <SectionTitle number="2" icon={<MapPinned size={18} />} title="Identificação e organização" id="details-section-title" />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Nome de exibição *" htmlFor="layer-name" className="sm:col-span-2" help="Nome que aparece na lista de mapas para o usuário.">
+                    <input
+                      id="layer-name"
+                      type="text"
+                      required
+                      maxLength={255}
+                      value={form.name}
+                      onChange={(e) => change("name", e.target.value)}
+                      disabled={loading}
+                      placeholder="Ex.: Escolas municipais"
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Nome técnico no GeoServer *" htmlFor="layer-technical" help="Pode colar Ceara:escolas_municipais; o sistema salva somente escolas_municipais.">
+                    <input
+                      id="layer-technical"
+                      type="text"
+                      required
+                      maxLength={255}
+                      value={form.layer_name}
+                      onChange={(e) => change("layer_name", e.target.value)}
+                      disabled={loading}
+                      placeholder="Ex.: escolas_municipais"
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Subcategoria *" htmlFor="layer-subcategory" help="Define onde a camada ficará organizada no menu.">
+                    <select
+                      id="layer-subcategory"
+                      required
+                      value={form.subcategory}
+                      onChange={(e) => change("subcategory", e.target.value)}
+                      disabled={loading}
+                      className={inputClass}
+                    >
+                      <option value="">Selecione uma subcategoria</option>
+                      {subcategories.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {getSubcategoryLabel(item)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                <Field label="Descrição (opcional)" htmlFor="layer-description" className="mt-4">
+                  <textarea
+                    id="layer-description"
+                    rows={3}
+                    value={form.description}
+                    onChange={(e) => change("description", e.target.value)}
+                    disabled={loading}
+                    placeholder="Sobre o que é esta camada?"
+                    className={`${inputClass} resize-y`}
+                  />
+                </Field>
+
+                <label className="mt-4 flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-blue-100 bg-blue-50/70 p-3.5">
+                  <span>
+                    <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                      <Globe2 size={16} className="text-blue-700" /> Camada pública
+                    </span>
+                    <span className="mt-1 block text-xs text-slate-500">Permite que a camada apareça no mapa público, se estiver ativa.</span>
+                  </span>
                   <input
                     type="checkbox"
                     checked={form.isPublic}
-                    onChange={(event) =>
-                      handleChange(
-                        "isPublic",
-                        event.target.checked
-                      )
-                    }
+                    onChange={(e) => change("isPublic", e.target.checked)}
                     disabled={loading}
-                    className="h-5 w-5 accent-blue-700"
+                    className="h-5 w-5 shrink-0 accent-blue-700"
                   />
                 </label>
-              </div>
+              </section>
+
+              <section className="overflow-hidden rounded-xl border border-slate-200" aria-labelledby="advanced-title">
+                <button
+                  type="button"
+                  onClick={() => setAdvancedOpen((open) => !open)}
+                  aria-expanded={advancedOpen}
+                  aria-controls="layer-advanced-fields"
+                  disabled={loading}
+                  className="flex w-full items-center justify-between gap-3 bg-slate-50 px-4 py-3 text-left hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-slate-800" id="advanced-title">
+                    <Settings2 size={18} className="text-slate-600" /> Configurações avançadas
+                  </span>
+                  <ChevronDown size={18} className={`text-slate-500 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
+                </button>
+                {advancedOpen && (
+                  <div id="layer-advanced-fields" className="grid gap-4 p-4 sm:grid-cols-2">
+                    <Field label="Sistema de coordenadas (CRS)" htmlFor="layer-crs">
+                      <input id="layer-crs" type="text" value={form.crs} onChange={(e) => change("crs", e.target.value)} disabled={loading} placeholder="EPSG:4326" className={inputClass} />
+                    </Field>
+                    <Field label="Ordem de exibição" htmlFor="layer-order">
+                      <input id="layer-order" type="number" step="1" value={form.order} onChange={(e) => change("order", e.target.value)} disabled={loading} placeholder="0" className={inputClass} />
+                    </Field>
+                    <Field label="Escala máxima (opcional)" htmlFor="layer-max-scale">
+                      <input id="layer-max-scale" type="number" step="any" min="0" value={form.max_scale} onChange={(e) => change("max_scale", e.target.value)} disabled={loading} placeholder="Não definida" className={inputClass} />
+                    </Field>
+                    <Field label="URL da legenda (opcional)" htmlFor="layer-legend" className="sm:col-span-2">
+                      <input id="layer-legend" type="text" value={form.legend_url} onChange={(e) => change("legend_url", e.target.value)} disabled={loading} placeholder="Preenchida ao escolher uma camada WMS" className={inputClass} />
+                    </Field>
+                  </div>
+                )}
+              </section>
             </div>
-          </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-            <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Eye
-                    size={18}
-                    className="text-blue-700"
-                  />
-
-                  <h3 className="font-black text-slate-800">
-                    Pré-visualização da camada
-                  </h3>
+            <aside className="border-t border-slate-100 bg-slate-50/75 p-5 sm:p-7 xl:border-l xl:border-t-0" aria-label="Pré-visualização cartográfica">
+              <div className="xl:sticky xl:top-0">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                      <Eye size={19} className="text-blue-700" /> Pré-visualização
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500">Confira a camada antes de salvar.</p>
+                  </div>
+                  {preview && (
+                    <button type="button" onClick={clearPreview} disabled={loading} aria-label="Limpar pré-visualização" className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-100">
+                      <EyeOff size={18} />
+                    </button>
+                  )}
                 </div>
 
-                <p className="text-sm text-slate-500 mt-1">
-                  Veja como a camada vai aparecer no mapa antes de salvar.
-                </p>
-              </div>
+                <div className="relative mt-4 h-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-white sm:h-[340px] xl:h-[390px]">
+                  {preview ? (
+                    <>
+                      <PreviewMap
+                        key={preview.key}
+                        config={preview}
+                        onLoaded={() => {
+                          setPreviewLoading(false);
+                          setPreviewError("");
+                        }}
+                        onError={() => {
+                          setPreviewLoading(false);
+                          setPreviewError("A prévia não carregou. Confira o nome técnico e a fonte WMS selecionada.");
+                        }}
+                      />
+                      {previewLoading && (
+                        <div className="absolute inset-0 z-[500] flex items-center justify-center gap-2 bg-white/75 text-sm font-semibold text-blue-700">
+                          <Loader2 size={18} className="animate-spin" /> Carregando mapa...
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 px-7 text-center">
+                      <div className="rounded-2xl bg-blue-50 p-4 text-blue-700"><MapPinned size={30} /></div>
+                      <p className="mt-2 text-sm font-semibold text-slate-800">A camada ainda não foi visualizada</p>
+                      <p className="max-w-xs text-xs text-slate-500">Selecione uma camada WMS ou informe seu nome técnico e clique em visualizar.</p>
+                    </div>
+                  )}
+                </div>
+                {previewError && <Feedback tone="error">{previewError}</Feedback>}
 
-              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={handlePreview}
-                  disabled={
-                    loading ||
-                    !form.layer_name.trim()
-                  }
-                  className="px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center gap-2"
+                  disabled={loading || !normalizeTechnicalName(form.layer_name)}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Eye size={18} />
-                  Pré-visualizar
+                  <Eye size={18} /> {preview ? "Atualizar prévia" : "Visualizar no mapa"}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={handleClearPreview}
-                  disabled={!previewConfig}
-                  className="px-5 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
-                >
-                  <EyeOff size={18} />
-                  Limpar
-                </button>
-              </div>
-            </div>
-
-            {previewError && (
-              <div className="mb-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 p-4 text-sm flex gap-2">
-                <AlertTriangle
-                  size={18}
-                  className="shrink-0 mt-0.5"
-                />
-                {previewError}
-              </div>
-            )}
-
-            <div className="rounded-3xl overflow-hidden border border-slate-200 bg-white">
-              <div className="h-[360px] relative">
-                {!previewConfig ? (
-                  <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
-                    <div>
-                      <div className="h-16 w-16 rounded-3xl bg-blue-100 text-blue-700 flex items-center justify-center mx-auto">
-                        <Map size={30} />
-                      </div>
-
-                      <h4 className="font-black text-slate-800 mt-4">
-                        Nenhuma pré-visualização carregada
-                      </h4>
-
-                      <p className="text-sm text-slate-500 mt-2 max-w-md">
-                        Escolha uma layer ou informe o nome técnico e clique em “Pré-visualizar”.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {previewLoading && (
-                      <div className="absolute inset-0 z-[500] bg-white/70 backdrop-blur-sm flex items-center justify-center">
-                        <div className="flex items-center gap-2 text-blue-700 font-bold">
-                          <Loader2
-                            size={20}
-                            className="animate-spin"
-                          />
-                          Carregando prévia...
-                        </div>
-                      </div>
-                    )}
-
-                    <PreviewMap
-                      key={previewConfig.key}
-                      config={previewConfig}
-                      onLoaded={() =>
-                        setPreviewLoading(false)
-                      }
-                      onError={() => {
-                        setPreviewLoading(false);
-                        setPreviewError(
-                          "A camada não carregou na prévia. Confira se o nome técnico está correto. No seu projeto, normalmente ele deve estar sem o prefixo do workspace."
-                        );
-                      }}
-                    />
-                  </>
-                )}
-              </div>
-
-              {previewConfig && (
-                <div className="p-4 border-t border-slate-200 bg-white">
-                  <p className="text-xs font-black text-slate-500 uppercase">
-                    Parâmetros da prévia
-                  </p>
-
-                  <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                    <InfoBox
-                      label="Layer"
-                      value={
-                        previewConfig.layerName
-                      }
-                    />
-
-                    <InfoBox
-                      label="Formato"
-                      value="image/png"
-                    />
-
-                    <InfoBox
-                      label="WMS"
-                      value={
-                        selectedWmsLink?.name ||
-                        "Proxy padrão"
-                      }
-                    />
-                  </div>
+                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
+                  <p className="font-semibold text-slate-800">Resumo do cadastro</p>
+                  <p className="mt-2"><span className="text-slate-500">Nome:</span> {form.name.trim() || "Ainda não informado"}</p>
+                  <p className="mt-1 break-all"><span className="text-slate-500">Camada:</span> {normalizeTechnicalName(form.layer_name) || "Ainda não informada"}</p>
+                  <p className="mt-1"><span className="text-slate-500">Visibilidade:</span> {form.isPublic ? "Pública" : "Restrita"}</p>
                 </div>
-              )}
-            </div>
-          </section>
+              </div>
+            </aside>
+          </div>
 
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <FileText
-                size={18}
-                className="text-blue-700"
-              />
-
-              <h3 className="font-black text-slate-800">
-                Descrição
-              </h3>
-            </div>
-
-            <textarea
-              value={form.description}
-              onChange={(event) =>
-                handleChange(
-                  "description",
-                  event.target.value
-                )
-              }
-              disabled={loading}
-              rows={4}
-              placeholder="Descreva a finalidade desta camada..."
-              className={`
-                ${inputClass}
-                resize-none
-              `}
-            />
-          </section>
-
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-2 border-t border-slate-100">
-            <div className="text-sm text-slate-500">
-              Dica: o nome técnico salvo será sempre o nome sem o prefixo do workspace.
-            </div>
-
-            <div className="flex justify-end gap-3">
+          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:px-7">
+            <p className="hidden text-xs text-slate-500 md:block">* Campos obrigatórios</p>
+            <div className="ml-auto flex w-full justify-end gap-3 sm:w-auto">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={loading}
-                className="px-5 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition disabled:opacity-50"
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Cancelar
               </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setForm((previous) => ({
-                    ...previous,
-                    name: getFriendlyLayerName(
-                      previous.name,
-                      previous.layer_name
-                    ),
-                  }));
-                }}
-                disabled={loading}
-                className="px-5 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition flex items-center gap-2"
-              >
-                <RotateCcw size={18} />
-                Ajustar nome
-              </button>
-
               <button
                 type="submit"
-                disabled={
-                  loading ||
-                  !form.name.trim() ||
-                  !form.layer_name.trim()
-                }
-                className="px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={!canSave}
+                className="flex min-w-36 items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading ? (
-                  <>
-                    <Loader2
-                      size={18}
-                      className="animate-spin"
-                    />
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <Save size={18} />
-                    Salvar camada
-                  </>
-                )}
+                {loading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {loading ? "Salvando..." : isEditing ? "Salvar alterações" : "Cadastrar camada"}
               </button>
             </div>
-          </div>
+          </footer>
         </form>
       </div>
     </div>
   );
 }
 
-function PreviewMap({
-  config,
-  onLoaded,
-  onError,
-}) {
+function PreviewMap({ config, onLoaded, onError }) {
   return (
-    <MapContainer
-      center={SOBRAL_CENTER}
-      zoom={13}
-      zoomControl
-      className="h-full w-full"
-    >
-      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
+    <MapContainer center={SOBRAL_CENTER} zoom={13} zoomControl className="h-full w-full">
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      />
       <WMSTileLayer
         url={PROXY_WMS_URL}
         layers={config.layerName}
-        transparent={true}
+        transparent
         format="image/png"
-        version={config.version || "1.1.1"}
-        wms_link_id={config.wmsLinkId || ""}
+        version={config.version}
+        wms_link_id={config.wmsLinkId}
         crossOrigin="anonymous"
-        eventHandlers={{
-          load: onLoaded,
-          tileerror: onError,
-        }}
+        eventHandlers={{ load: onLoaded, tileerror: onError }}
       />
     </MapContainer>
   );
 }
 
-function FormField({ label, children }) {
+function SectionTitle({ number, icon, title, id }) {
   return (
-    <div>
-      <label className="block text-sm font-bold text-slate-700 mb-2">
-        {label}
-      </label>
+    <h3 id={id} className="mb-2 flex items-center gap-2 text-base font-bold text-slate-900">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-xs font-black text-blue-700">{number}</span>
+      <span className="text-blue-700">{icon}</span>
+      {title}
+    </h3>
+  );
+}
 
+function Field({ label, htmlFor, children, help, className = "" }) {
+  return (
+    <div className={className}>
+      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
       {children}
+      {help && <p className="mt-1 text-xs text-slate-500">{help}</p>}
     </div>
   );
 }
 
-function HelpText({ children }) {
+function Feedback({ tone = "error", children }) {
   return (
-    <p className="text-xs text-slate-400 mt-1">
-      {children}
-    </p>
-  );
-}
-
-function InfoBox({ label, value }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3 min-w-0">
-      <p className="text-[10px] font-black text-slate-400 uppercase">
-        {label}
-      </p>
-
-      <p className="text-sm font-bold text-slate-700 break-all mt-1">
-        {value}
-      </p>
+    <div role="alert" className={`mt-3 flex gap-2 rounded-xl border p-3 text-sm ${tone === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-blue-200 bg-blue-50 text-blue-700"}`}>
+      <AlertCircle size={17} className="mt-0.5 shrink-0" />
+      <span>{children}</span>
     </div>
   );
 }
-
-const inputClass = `
-  w-full
-  px-4
-  py-3
-  rounded-2xl
-  border
-  border-slate-200
-  outline-none
-  bg-white
-  focus:border-blue-500
-  focus:ring-4
-  focus:ring-blue-100
-  disabled:bg-slate-100
-  disabled:cursor-not-allowed
-  transition
-`;
 
 function getInitialForm(layer) {
   return {
@@ -1064,104 +577,47 @@ function getInitialForm(layer) {
     legend_url: layer?.legend_url || "",
     type: layer?.type || "WMS",
     description: layer?.description || "",
-    order:
-      layer?.order === null ||
-      layer?.order === undefined
-        ? ""
-        : String(layer.order),
+    order: layer?.order == null ? "0" : String(layer.order),
     subcategory: getLayerSubcategoryId(layer),
     image_path: layer?.image_path || "",
-    max_scale:
-      layer?.max_scale === null ||
-      layer?.max_scale === undefined
-        ? ""
-        : String(layer.max_scale),
+    max_scale: layer?.max_scale == null ? "" : String(layer.max_scale),
     symbol: layer?.symbol || "",
-    wms_link_id:
-      layer?.wms_link_id === null ||
-      layer?.wms_link_id === undefined
-        ? ""
-        : String(layer.wms_link_id),
-    isPublic:
-      layer?.isPublic === undefined ||
-      layer?.isPublic === null
-        ? true
-        : Boolean(layer.isPublic),
+    wms_link_id: layer?.wms_link_id == null ? "" : String(layer.wms_link_id),
+    isPublic: layer?.isPublic == null ? true : Boolean(layer.isPublic),
   };
 }
 
 function getLayerSubcategoryId(layer) {
-  if (!layer) return "";
-
-  if (
-    typeof layer.subcategory === "object" &&
-    layer.subcategory !== null
-  ) {
-    return String(layer.subcategory.id);
-  }
-
-  if (
-    layer.subcategory !== null &&
-    layer.subcategory !== undefined
-  ) {
-    return String(layer.subcategory);
-  }
-
-  return "";
-}
-
-function getSubcategoryLabel(subcategory) {
-  const categoryName =
-    subcategory.category?.name || "Sem categoria";
-
-  const status = subcategory.is_active
-    ? ""
-    : " - Inativa";
-
-  return `${categoryName} / ${subcategory.name}${status}`;
-}
-
-function getWmsLabel(wmsLink) {
-  return (
-    wmsLink.name ||
-    wmsLink.title ||
-    wmsLink.url ||
-    wmsLink.base_url ||
-    wmsLink.link ||
-    `WMS #${wmsLink.id}`
+  if (!layer || layer.subcategory == null) return "";
+  return String(
+    typeof layer.subcategory === "object" ? layer.subcategory.id : layer.subcategory
   );
+}
+
+function getSubcategoryLabel(item) {
+  const category = item.category?.name || "Sem categoria";
+  return `${category} / ${item.name}${item.is_active === false ? " (inativa)" : ""}`;
+}
+
+function getWmsLabel(item) {
+  return item.name || item.title || item.url || `WMS #${item.id}`;
 }
 
 function removeWorkspacePrefix(value) {
-  if (!value) return "";
+  return String(value || "").trim().split(":").pop().trim();
+}
 
-  const parts = String(value).split(":");
-
-  return parts[parts.length - 1];
+function normalizeTechnicalName(value) {
+  return removeWorkspacePrefix(value);
 }
 
 function getFriendlyLayerName(title, technicalName) {
-  const cleanedTitle = removeWorkspacePrefix(
-    title || ""
-  );
-
-  const cleanedTechnicalName =
-    removeWorkspacePrefix(technicalName || "");
-
-  const raw =
-    cleanedTitle &&
-    cleanedTitle !== cleanedTechnicalName
-      ? cleanedTitle
-      : cleanedTechnicalName || cleanedTitle;
-
-  if (!raw) return "";
-
-  return String(raw)
-    .replace(/_/g, " ")
-    .replace(/-/g, " ")
+  const cleanTitle = removeWorkspacePrefix(title);
+  const cleanTechnical = removeWorkspacePrefix(technicalName);
+  const raw = cleanTitle && cleanTitle !== cleanTechnical ? cleanTitle : cleanTechnical || cleanTitle;
+  return String(raw || "")
+    .replace(/[_-]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase()
-    );
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
