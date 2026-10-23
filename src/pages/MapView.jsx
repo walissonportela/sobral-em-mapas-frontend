@@ -78,7 +78,7 @@ function MapView() {
             mapToolsRef={mapToolsRef}
           />
 
-          <Chatbot />
+          {/* <Chatbot /> */}
         </div>
       </main>
 

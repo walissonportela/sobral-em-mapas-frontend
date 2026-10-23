@@ -105,15 +105,21 @@ export default function Sidebar({
 
         data.forEach((layer) => {
           const category =
-            layer.subcategory?.category?.name ||
-            "Geral";
+            layer.subcategory?.category?.name || "Geral";
 
           categories[category] = false;
         });
 
         setExpanded(categories);
+
+
+        setExpanded(categories);
       } catch (error) {
-        console.error(error);
+          console.error("Erro ao carregar camadas:", error);
+
+          if (isMounted) {
+            setLayers([]);
+          }
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -1262,6 +1268,7 @@ function LegendPanel({ activeLayers = [] }) {
   );
 }
 
+
 function LegendCard({ layer, onHide }) {
   const [legendError, setLegendError] =
     useState(false);
@@ -1269,8 +1276,16 @@ function LegendCard({ layer, onHide }) {
   const [previewError, setPreviewError] =
     useState(false);
 
-  const legendUrl = buildLegendUrl(layer);
-  const previewUrl = buildLayerPreviewUrl(layer);
+  const isGeoJSON =
+    layer.source_format === "GEOJSON";
+
+  const legendUrl = isGeoJSON
+    ? null
+    : buildLegendUrl(layer);
+
+  const previewUrl = isGeoJSON
+    ? null
+    : buildLayerPreviewUrl(layer);
 
   const description = getLayerDescription(layer);
 
@@ -1284,13 +1299,15 @@ function LegendCard({ layer, onHide }) {
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+
+      {/* Cabeçalho */}
       <div className="p-4 border-b border-slate-100 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-black text-slate-800 text-sm truncate">
             {layer.name}
           </h3>
 
-          <p className="text-xs text-slate-400 mt-1 truncate">
+          <p className="text-xs text-slate-400 mt-1">
             {categoryName} • {subcategoryName}
           </p>
         </div>
@@ -1305,7 +1322,9 @@ function LegendCard({ layer, onHide }) {
         </button>
       </div>
 
+      {/* Conteúdo */}
       <div className="p-4 space-y-3">
+
         {description ? (
           <p className="text-sm text-slate-600 leading-relaxed">
             {description}
@@ -1316,59 +1335,92 @@ function LegendCard({ layer, onHide }) {
           </p>
         )}
 
-        {!legendError && (
-          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 inline-flex max-w-full">
-            <img
-              src={legendUrl}
-              alt={`Simbologia da camada ${layer.name}`}
-              onError={() => setLegendError(true)}
-              className="
-                max-w-[180px]
-                max-h-[90px]
-                object-contain
-              "
-            />
-          </div>
-        )}
+        {/* Legenda GeoJSON */}
+        {isGeoJSON ? (
+          <div className="space-y-3">
 
-        {legendError && !previewError && (
-          <div className="rounded-xl border border-slate-100 bg-slate-50 overflow-hidden">
-            <div className="px-3 py-2 border-b border-slate-100">
-              <p className="text-[11px] font-bold text-slate-500">
-                Prévia da camada
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+
+              <p className="text-xs font-bold text-slate-600 mb-3">
+                Simbologia
               </p>
+
+              <div className="flex items-center gap-3">
+
+                <div
+                  className="w-7 h-7 rounded border-2 border-blue-600 shrink-0"
+                  style={{
+                    backgroundColor:
+                      "rgba(59, 130, 246, 0.12)",
+                  }}
+                />
+
+                <span className="text-xs font-medium text-slate-700">
+                  Limites dos bairros
+                </span>
+
+              </div>
             </div>
 
-            <img
-              src={previewUrl}
-              alt={`Prévia da camada ${layer.name}`}
-              onError={() => setPreviewError(true)}
-              className="
-                w-full
-                h-[120px]
-                object-cover
-                bg-white
-              "
-            />
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <FileText size={14} />
+              <span>Dados vetoriais (GeoJSON)</span>
+            </div>
+
           </div>
+        ) : (
+          <>
+            {/* Legenda WMS original */}
+            {!legendError && (
+              <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 inline-flex max-w-full">
+                <img
+                  src={legendUrl}
+                  alt={`Simbologia da camada ${layer.name}`}
+                  onError={() => setLegendError(true)}
+                  className="max-w-[180px] max-h-[90px] object-contain"
+                />
+              </div>
+            )}
+
+            {/* Pré-visualização WMS */}
+            {legendError && !previewError && (
+              <div className="rounded-xl border border-slate-100 bg-slate-50 overflow-hidden">
+                <div className="px-3 py-2 border-b border-slate-100">
+                  <p className="text-[11px] font-bold text-slate-500">
+                    Prévia da camada
+                  </p>
+                </div>
+
+                <img
+                  src={previewUrl}
+                  alt={`Prévia da camada ${layer.name}`}
+                  onError={() => setPreviewError(true)}
+                  className="w-full h-[120px] object-cover bg-white"
+                />
+              </div>
+            )}
+
+            {/* Falha na legenda WMS */}
+            {legendError && previewError && (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-center">
+                <ImageOff
+                  size={22}
+                  className="text-slate-400 mx-auto"
+                />
+
+                <p className="text-xs text-slate-500 mt-2">
+                  Sem simbologia ou prévia disponível.
+                </p>
+              </div>
+            )}
+          </>
         )}
 
-        {legendError && previewError && (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-center">
-            <ImageOff
-              size={22}
-              className="text-slate-400 mx-auto"
-            />
-
-            <p className="text-xs text-slate-500 mt-2">
-              Sem simbologia ou prévia disponível.
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
 }
+
 
 function BookmarksPanel({
   favoriteLayers = [],

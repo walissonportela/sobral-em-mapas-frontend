@@ -110,3 +110,48 @@ html, body, #root {
 ::-webkit-scrollbar-thumb:hover {
   background: #64748b;
 }
+
+
+/* Nomes dos bairros no mapa */
+.leaflet-tooltip.bairro-tooltip {
+  background: rgba(255, 255, 255, 0.9);
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  box-shadow: none;
+  padding: 3px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Remove a seta do tooltip */
+.leaflet-tooltip.bairro-tooltip::before {
+  display: none;
+}
+
+
+/* Informações dos bairros */
+.bairro-popup {
+  min-width: 190px;
+  max-width: 280px;
+  font-family: inherit;
+}
+
+.bairro-popup h3 {
+  color: #1d4ed8;
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.bairro-popup p {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 5px 0;
+}

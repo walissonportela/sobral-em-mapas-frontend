@@ -26,6 +26,7 @@ import {
 
 import PrintSelectionOverlay from "./PrintSelectionOverlay";
 import MapControls from "./MapControls";
+import LocalGeoJSONLayer from "./LocalGeoJSONLayer";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
@@ -74,7 +75,6 @@ export default function Map({
   const drawLayerRef = useRef(null);
 
   const position = [-3.6892, -40.3489];
-
   useEffect(() => {
     let isMounted = true;
 
@@ -103,6 +103,9 @@ export default function Map({
       isMounted = false;
     };
   }, []);
+
+  
+
 
   const exportSelectedArea = useCallback(
     async (selectedFormat = printFormat) => {
@@ -332,8 +335,10 @@ export default function Map({
         </Pane>
 
         <Pane name="wms-layers" style={{ zIndex: 450 }}>
-          {activeLayers.map((layer) => (
-            <WMSTileLayer
+          {activeLayers
+            .filter((layer) => layer.source_format !== "GEOJSON")
+            .map((layer) => (
+              <WMSTileLayer
               key={layer.id}
               url={`${API_BASE_URL}/proxy-wms`}
               layers={layer.layer_name}
@@ -360,6 +365,15 @@ export default function Map({
             }}
           />
         )}
+
+        
+        {activeLayers
+          .filter((layer) => layer.source_format === "GEOJSON")
+          .map((layer) => (
+            <LocalGeoJSONLayer key={layer.id} layer={layer} />
+          ))}
+
+
       </MapContainer>
 
       {printMode && (
