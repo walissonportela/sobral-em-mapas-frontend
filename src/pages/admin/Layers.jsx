@@ -20,6 +20,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import ConfirmDialog from "../../components/admin/ConfirmDialog";
 import Toast from "../../components/ui/Toast";
 import LayerFormModal from "../../components/admin/LayerFormModal";
+import GeoJSONDownloadButton from "../../components/admin/GeoJSONDownloadButton";
 
 import {
   getLayers,
@@ -503,56 +504,67 @@ export default function Layers() {
               }
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr>
-                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase">
-                      Camada
-                    </th>
+            <>
+              {/* Cartões responsivos: melhor leitura em celulares e tablets. */}
+              <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:hidden sm:p-5">
+                {filteredLayers.map((layer) => (
+                  <LayerCard
+                    key={layer.id}
+                    layer={layer}
+                    statusLoadingId={statusLoadingId}
+                    onEdit={() => setLayerModal({ layer })}
+                    onToggleStatus={() => handleToggleLayerStatus(layer)}
+                    onDelete={() => setDeleteTarget(layer)}
+                    onNotify={showToast}
+                  />
+                ))}
+              </div>
 
-                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase">
-                      Agrupamento
-                    </th>
-
-                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase">
-                      Tipo
-                    </th>
-
-                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase">
-                      Status
-                    </th>
-
-                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase text-right">
-                      Ações
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {filteredLayers.map((layer) => (
-                    <LayerRow
-                      key={layer.id}
-                      layer={layer}
-                      statusLoadingId={
-                        statusLoadingId
-                      }
-                      onEdit={() =>
-                        setLayerModal({
-                          layer,
-                        })
-                      }
-                      onToggleStatus={() =>
-                        handleToggleLayerStatus(layer)
-                      }
-                      onDelete={() =>
-                        setDeleteTarget(layer)
-                      }
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              {/* Tabela com proporções estáveis em telas grandes. */}
+              <div className="hidden overflow-x-auto xl:block">
+                <table className="w-full min-w-[1060px] table-fixed text-left">
+                  <colgroup>
+                    <col className="w-[29%]" />
+                    <col className="w-[23%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[21%]" />
+                  </colgroup>
+                  <thead className="border-b border-blue-100 bg-blue-50/60">
+                    <tr>
+                      {[
+                        "Camada",
+                        "Categoria e subcategoria",
+                        "Formato",
+                        "Visibilidade",
+                        "Ações",
+                      ].map((heading) => (
+                        <th
+                          key={heading}
+                          scope="col"
+                          className={`px-4 py-4 text-[11px] font-black uppercase tracking-wider text-slate-600 ${heading === "Ações" ? "text-right" : ""}`}
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredLayers.map((layer) => (
+                      <LayerRow
+                        key={layer.id}
+                        layer={layer}
+                        statusLoadingId={statusLoadingId}
+                        onEdit={() => setLayerModal({ layer })}
+                        onToggleStatus={() => handleToggleLayerStatus(layer)}
+                        onDelete={() => setDeleteTarget(layer)}
+                        onNotify={showToast}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       </div>
@@ -600,158 +612,220 @@ export default function Layers() {
   );
 }
 
+/** Ações compartilhadas entre a tabela e os cartões responsivos. */
+function LayerActions({
+  layer,
+  statusLoadingId,
+  onEdit,
+  onToggleStatus,
+  onDelete,
+  onNotify,
+}) {
+  const isStatusLoading = statusLoadingId === layer.id;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+      <button
+        type="button"
+        onClick={onToggleStatus}
+        disabled={isStatusLoading}
+        aria-label={layer.is_active ? "Desativar camada" : "Reativar camada"}
+        title={layer.is_active ? "Desativar camada" : "Reativar camada"}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+          layer.is_active
+            ? "bg-red-50 text-red-600 hover:bg-red-100"
+            : "bg-green-50 text-green-700 hover:bg-green-100"
+        }`}
+      >
+        {isStatusLoading ? (
+          <RefreshCcw size={17} className="animate-spin" />
+        ) : layer.is_active ? (
+          <PowerOff size={17} />
+        ) : (
+          <Power size={17} />
+        )}
+      </button>
+
+      <GeoJSONDownloadButton layer={layer} onNotify={onNotify} />
+
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`Editar ${layer.name}`}
+        title="Editar camada"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+      >
+        <Pencil size={17} />
+      </button>
+
+      <button
+        type="button"
+        onClick={onDelete}
+        aria-label={`Excluir ${layer.name}`}
+        title="Excluir definitivamente"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 transition hover:bg-red-100 hover:text-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+      >
+        <Trash2 size={17} />
+      </button>
+    </div>
+  );
+}
+
+function LayerFormat({ layer }) {
+  const isGeojson = layer.source_format === "GEOJSON";
+  const label = isGeojson ? "GeoJSON" : layer.type || "WMS";
+
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <span
+        className={`inline-flex rounded-lg border px-2.5 py-1 text-xs font-extrabold ${
+          isGeojson
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-blue-200 bg-blue-50 text-blue-700"
+        }`}
+      >
+        {label}
+      </span>
+      <span className="text-xs font-medium text-slate-500">
+        {layer.crs || "EPSG:4326"}
+      </span>
+    </div>
+  );
+}
+
+function LayerIdentity({ layer }) {
+  return (
+    <div className="flex min-w-0 items-start gap-3">
+      <div
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+          layer.is_active
+            ? "bg-blue-100 text-blue-700"
+            : "bg-slate-200 text-slate-500"
+        }`}
+      >
+        <Map size={21} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p
+          title={layer.name}
+          className={`line-clamp-3 break-words text-sm font-extrabold leading-snug [overflow-wrap:anywhere] ${
+            layer.is_active ? "text-slate-800" : "text-slate-500"
+          }`}
+        >
+          {layer.name}
+        </p>
+        <p
+          title={layer.layer_name}
+          className="mt-1 truncate text-xs font-medium text-slate-400"
+        >
+          {layer.layer_name}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function LayerGrouping({ layer }) {
+  const category = layer.subcategory?.category?.name || "Sem categoria";
+  const subcategory = layer.subcategory?.name || "Sem subcategoria";
+
+  return (
+    <div className="min-w-0 space-y-1">
+      <p className="break-words text-sm font-bold leading-snug text-slate-700 [overflow-wrap:anywhere]">
+        {category}
+      </p>
+      <p className="break-words text-xs leading-snug text-slate-500 [overflow-wrap:anywhere]">
+        {subcategory}
+      </p>
+      {layer.source_format === "GEOJSON" ? (
+        <p className="text-xs text-emerald-700">Arquivo geográfico</p>
+      ) : (
+        <div className="min-w-0 truncate text-xs text-slate-400" title="Fonte WMS">
+          {getLayerWmsLabel(layer)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LayerRow({
   layer,
   statusLoadingId,
   onEdit,
   onToggleStatus,
   onDelete,
+  onNotify,
 }) {
-  const isStatusLoading =
-    statusLoadingId === layer.id;
-
   return (
     <tr
-      className={`
-        transition
-        ${
-          layer.is_active
-            ? "hover:bg-slate-50"
-            : "bg-slate-50/70 hover:bg-slate-100"
-        }
-      `}
+      className={`align-top transition-colors ${
+        layer.is_active ? "hover:bg-blue-50/40" : "bg-slate-50/60 hover:bg-slate-100"
+      }`}
     >
-      <td className="px-6 py-4 min-w-[320px]">
-        <div className="flex items-center gap-3">
-          <div
-            className={`
-              h-11
-              w-11
-              rounded-2xl
-              flex
-              items-center
-              justify-center
-              shrink-0
-              ${
-                layer.is_active
-                  ? "bg-blue-100 text-blue-700"
-                  : "bg-slate-200 text-slate-500"
-              }
-            `}
-          >
-            <Map size={21} />
-          </div>
-
-          <div className="min-w-0">
-            <p
-              className={`
-                font-black
-                truncate
-                ${
-                  layer.is_active
-                    ? "text-slate-800"
-                    : "text-slate-500"
-                }
-              `}
-            >
-              {layer.name}
-            </p>
-
-            <p className="text-xs text-slate-500 mt-0.5 truncate">
-              {layer.layer_name}
-            </p>
-          </div>
-        </div>
-      </td>
-
-      <td className="px-6 py-4 min-w-[260px]">
-        <p className="font-bold text-slate-700">
-          {getLayerSubcategoryLabel(layer)}
-        </p>
-
-        <p className="text-xs text-slate-400 mt-0.5">
-          {getLayerWmsLabel(layer)}
-        </p>
-      </td>
-
-      <td className="px-6 py-4">
-        <div className="space-y-1">
-          <span className="inline-flex px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-black">
-            {layer.type || "WMS"}
-          </span>
-
-          <p className="text-xs text-slate-500">
-            {layer.crs || "EPSG:4326"}
-          </p>
-        </div>
-      </td>
-
-      <td className="px-6 py-4 min-w-[180px]">
-        <div className="flex flex-wrap gap-2">
+      <td className="px-4 py-5"><LayerIdentity layer={layer} /></td>
+      <td className="px-4 py-5"><LayerGrouping layer={layer} /></td>
+      <td className="px-4 py-5"><LayerFormat layer={layer} /></td>
+      <td className="px-4 py-5">
+        <div className="flex flex-col items-start gap-1.5">
           <StatusBadge active={layer.is_active} />
           <PublicBadge isPublic={layer.isPublic} />
         </div>
       </td>
-
-      <td className="px-6 py-4">
-        <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onToggleStatus}
-            disabled={isStatusLoading}
-            className={`
-              h-10
-              w-10
-              rounded-xl
-              transition
-              disabled:opacity-60
-              flex
-              items-center
-              justify-center
-              ${
-                layer.is_active
-                  ? "bg-red-50 text-red-600 hover:bg-red-100"
-                  : "bg-green-50 text-green-700 hover:bg-green-100"
-              }
-            `}
-            title={
-              layer.is_active
-                ? "Desativar camada"
-                : "Reativar camada"
-            }
-          >
-            {isStatusLoading ? (
-              <RefreshCcw
-                size={17}
-                className="animate-spin"
-              />
-            ) : layer.is_active ? (
-              <PowerOff size={17} />
-            ) : (
-              <Power size={17} />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={onEdit}
-            className="h-10 w-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700 transition flex items-center justify-center"
-            title="Editar camada"
-          >
-            <Pencil size={17} />
-          </button>
-
-          <button
-            type="button"
-            onClick={onDelete}
-            className="h-10 w-10 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-800 transition flex items-center justify-center"
-            title="Excluir definitivamente"
-          >
-            <Trash2 size={17} />
-          </button>
-        </div>
+      <td className="px-4 py-5">
+        <LayerActions
+          layer={layer}
+          statusLoadingId={statusLoadingId}
+          onEdit={onEdit}
+          onToggleStatus={onToggleStatus}
+          onDelete={onDelete}
+          onNotify={onNotify}
+        />
       </td>
     </tr>
+  );
+}
+
+function LayerCard({
+  layer,
+  statusLoadingId,
+  onEdit,
+  onToggleStatus,
+  onDelete,
+  onNotify,
+}) {
+  return (
+    <article
+      className={`flex min-w-0 flex-col gap-4 rounded-2xl border p-4 shadow-sm ${
+        layer.is_active
+          ? "border-slate-200 bg-white"
+          : "border-slate-200 bg-slate-50"
+      }`}
+    >
+      <LayerIdentity layer={layer} />
+      <div className="rounded-xl bg-slate-50 p-3">
+        <LayerGrouping layer={layer} />
+      </div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <LayerFormat layer={layer} />
+        <div className="flex flex-col items-end gap-1.5">
+          <StatusBadge active={layer.is_active} />
+          <PublicBadge isPublic={layer.isPublic} />
+        </div>
+      </div>
+      <div className="mt-auto border-t border-slate-100 pt-3">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          Ações da camada
+        </div>
+        <LayerActions
+          layer={layer}
+          statusLoadingId={statusLoadingId}
+          onEdit={onEdit}
+          onToggleStatus={onToggleStatus}
+          onDelete={onDelete}
+          onNotify={onNotify}
+        />
+      </div>
+    </article>
   );
 }
 
