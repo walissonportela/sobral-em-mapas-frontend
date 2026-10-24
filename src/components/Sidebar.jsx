@@ -37,6 +37,7 @@ import {
 import api from "../services/api";
 import SearchPanel from "./SearchPanel";
 import MeasurePanel from "./MeasurePanel";
+import GeoJSONLegend from "./GeoJSONLegend";
 
 import { jsPDF } from "jspdf";
 
@@ -109,9 +110,6 @@ export default function Sidebar({
 
           categories[category] = false;
         });
-
-        setExpanded(categories);
-
 
         setExpanded(categories);
       } catch (error) {
@@ -1337,37 +1335,7 @@ function LegendCard({ layer, onHide }) {
 
         {/* Legenda GeoJSON */}
         {isGeoJSON ? (
-          <div className="space-y-3">
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-
-              <p className="text-xs font-bold text-slate-600 mb-3">
-                Simbologia
-              </p>
-
-              <div className="flex items-center gap-3">
-
-                <div
-                  className="w-7 h-7 rounded border-2 border-blue-600 shrink-0"
-                  style={{
-                    backgroundColor:
-                      "rgba(59, 130, 246, 0.12)",
-                  }}
-                />
-
-                <span className="text-xs font-medium text-slate-700">
-                  Limites dos bairros
-                </span>
-
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <FileText size={14} />
-              <span>Dados vetoriais (GeoJSON)</span>
-            </div>
-
-          </div>
+          <GeoJSONLegend layer={layer} />
         ) : (
           <>
             {/* Legenda WMS original */}
@@ -1995,7 +1963,7 @@ function buildLegendUrl(layer) {
     params.set("wms_link_id", wmsLinkId);
   }
 
-  return `${API_BASE_URL}/legend?${params.toString()}`;
+  return `${API_BASE_URL}/layer/legend?${params.toString()}`;
 }
 
 function buildLayerPreviewUrl(layer) {

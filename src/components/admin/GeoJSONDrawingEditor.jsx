@@ -9,8 +9,51 @@ import {
   Check, Circle, Droplet, Eraser, Expand, Eye, Hand, Info, Layers,
   List, LocateFixed, MapPin, Minus, Palette, Paintbrush, Pencil,
   Pentagon, RectangleHorizontal, RotateCcw, Scaling, Settings2,
-  Shrink, Trash2, Undo2, X,
+  Shrink, Trash2, Undo2, Redo2, Copy, Crosshair, X, FileText, Plus, Save,
 } from "lucide-react";
+
+// Tradução das dicas internas do Leaflet.draw, inclusive edição de vértices.
+// O editor mantém suas próprias instruções em português na parte inferior.
+function translateLeafletDraw() {
+  if (!L.drawLocal?.edit?.handlers?.edit) return;
+  const dict = L.drawLocal;
+  Object.assign(dict.edit.handlers.edit.tooltip, {
+    text: "Arraste os vértices ou marcadores para ajustar a geometria.",
+    subtext: "Clique em Concluir edição para salvar os ajustes.",
+  });
+  Object.assign(dict.edit.handlers.remove.tooltip, {
+    text: "Clique em um desenho para removê-lo.",
+  });
+  Object.assign(dict.draw.handlers.polyline.tooltip, {
+    start: "Clique no mapa para iniciar a linha.",
+    cont: "Clique para adicionar outro vértice.",
+    end: "Finalize a linha pela ferramenta Concluir.",
+  });
+  Object.assign(dict.draw.handlers.polygon.tooltip, {
+    start: "Clique para iniciar o polígono.",
+    cont: "Clique para adicionar outro vértice.",
+    end: "Finalize o polígono pela ferramenta Concluir.",
+  });
+  Object.assign(dict.draw.handlers.rectangle.tooltip, { start: "Clique e arraste para desenhar um retângulo." });
+  Object.assign(dict.draw.handlers.circle.tooltip, { start: "Clique e arraste para desenhar um círculo." });
+  Object.assign(dict.draw.handlers.simpleshape.tooltip, { end: "Solte o mouse para concluir." });
+  Object.assign(dict.draw.handlers.marker.tooltip, { start: "Clique no mapa para marcar um ponto." });
+  Object.assign(dict.draw.toolbar.actions, { title: "Cancelar desenho", text: "Cancelar" });
+  Object.assign(dict.draw.toolbar.finish, { title: "Concluir desenho", text: "Concluir" });
+  Object.assign(dict.draw.toolbar.undo, { title: "Remover último vértice", text: "Desfazer vértice" });
+  Object.assign(dict.draw.toolbar.buttons, {
+    polyline: "Desenhar linha", polygon: "Desenhar polígono", rectangle: "Desenhar retângulo",
+    circle: "Desenhar círculo", marker: "Adicionar ponto", circlemarker: "Adicionar marcador",
+  });
+  Object.assign(dict.edit.toolbar.buttons, {
+    edit: "Editar geometrias", editDisabled: "Nenhum desenho para editar",
+    remove: "Apagar geometrias", removeDisabled: "Nenhum desenho para apagar",
+  });
+  Object.assign(dict.edit.toolbar.actions.save, { title: "Salvar alterações", text: "Salvar" });
+  Object.assign(dict.edit.toolbar.actions.cancel, { title: "Cancelar edição", text: "Cancelar" });
+  Object.assign(dict.edit.toolbar.actions.clearAll, { title: "Remover todos os desenhos", text: "Limpar tudo" });
+}
+translateLeafletDraw();
 
 const SOBRAL_CENTER = [-3.6892, -40.3489];
 const PALETTE = [
@@ -53,6 +96,20 @@ function savedStyle(style) {
   };
 }
 
+// Reconstitui a aparência já salva em properties.estilo.
+// Sem estilo próprio, mantém os padrões do editor.
+function styleFromGeojson(feature) {
+  const saved = feature?.properties?.estilo || {};
+  return safeStyle({
+    color: saved.cor,
+    weight: saved.espessura,
+    lineOpacity: saved.opacidade_linha == null ? 100 : Number(saved.opacidade_linha) * 100,
+    fillOpacity: saved.opacidade_preenchimento == null ? 18 : Number(saved.opacidade_preenchimento) * 100,
+    lineStyle: saved.tipo_linha,
+    markerSize: saved.tamanho_ponto,
+  });
+}
+
 function vectorStyle(style) {
   const s = safeStyle(style);
   return {
@@ -91,27 +148,92 @@ function typeLabel(item) {
   return { Point: "Ponto", LineString: "Linha", Polygon: "Polígono" }[item.geometry] || item.geometry;
 }
 
-function metricForLayer(layer) {
+// Valores são sempre armazenados em unidades SI: m e m².
+// A conversão visual para km/km² não altera o arquivo GeoJSON.
+const roundMetric = (value) => Math.round(value * 100) / 100;
+const formatDistance = (meters) => meters >= 1000
+  ? `${(meters / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} km`
+  : `${meters.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m`;
+const formatArea = (squareMeters) => squareMeters >= 1000000
+  ? `${(squareMeters / 1000000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} km²`
+  : `${squareMeters.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m²`;
+
+function lengthOfRing(points, closed = false) {
+  let meters = 0;
+  for (let i = 1; i < points.length; i += 1) meters += points[i - 1].distanceTo(points[i]);
+  if (closed && points.length >= 3) meters += points[points.length - 1].distanceTo(points[0]);
+  return meters;
+}
+
+// Leaflet pode entregar [anel], [anelExterno, furo...] ou [[anéis...], ...].
+// Cada polígono soma a área externa e subtrai os furos.
+function polygonParts(latlngs) {
+  if (!Array.isArray(latlngs) || !latlngs.length) return [];
+  if (latlngs[0] && !Array.isArray(latlngs[0]) && typeof latlngs[0].lat === "number") {
+    return [[latlngs]];
+  }
+  if (Array.isArray(latlngs[0]) && latlngs[0][0] &&
+      !Array.isArray(latlngs[0][0]) && typeof latlngs[0][0].lat === "number") {
+    return [latlngs];
+  }
+  return latlngs.flatMap(polygonParts);
+}
+
+function calculateMetrics(layer) {
   try {
     if (layer instanceof L.Polygon) {
-      const ring = layer.getLatLngs()[0];
-      const area = L.GeometryUtil.geodesicArea(ring);
-      return area < 1000000
-        ? `${area.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m²`
-        : `${(area / 1000000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} km²`;
+      let area = 0;
+      let perimeter = 0;
+      for (const polygon of polygonParts(layer.getLatLngs())) {
+        polygon.forEach((ring, index) => {
+          if (!ring.length) return;
+          const ringArea = L.GeometryUtil.geodesicArea(ring);
+          area += index === 0 ? ringArea : -ringArea;
+          perimeter += lengthOfRing(ring, true);
+        });
+      }
+      return { area_m2: roundMetric(Math.max(0, area)), perimetro_m: roundMetric(perimeter) };
     }
     if (layer instanceof L.Polyline) {
       const coords = layer.getLatLngs();
-      let meters = 0;
-      for (let i = 1; i < coords.length; i += 1) meters += coords[i - 1].distanceTo(coords[i]);
-      return meters < 1000
-        ? `${meters.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m`
-        : `${(meters / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} km`;
+      // Nosso editor só desenha linhas simples; MultiLineString fica de fora aqui.
+      if (coords.some(Array.isArray)) return null;
+      return { comprimento_m: roundMetric(lengthOfRing(coords)) };
     }
   } catch (error) {
-    console.warn("Não foi possível calcular a medida da feição:", error);
+    console.warn("Não foi possível calcular as medidas da feição:", error);
   }
-  return "";
+  return null; // Pontos não têm distância, perímetro ou área próprios.
+}
+
+function updateLayerMeasurements(layer) {
+  if (!layer.feature) layer.feature = { type: "Feature", properties: {} };
+  if (!layer.feature.properties) layer.feature.properties = {};
+  const properties = layer.feature.properties;
+  // As medidas não são livres: são recalculadas sempre que a geometria muda.
+  delete properties.area_m2;
+  delete properties.perimetro_m;
+  delete properties.comprimento_m;
+  const metrics = calculateMetrics(layer);
+  if (metrics) Object.assign(properties, metrics);
+  return metrics;
+}
+
+function metricForLayer(layer) {
+  const metrics = calculateMetrics(layer);
+  if (!metrics) return "";
+  if (metrics.area_m2 !== undefined) {
+    return `Área: ${formatArea(metrics.area_m2)} · Perímetro: ${formatDistance(metrics.perimetro_m)}`;
+  }
+  return `Comprimento: ${formatDistance(metrics.comprimento_m)}`;
+}
+
+// Copia as coordenadas para permitir deslocar uma forma inteira mantendo
+// seus vértices e buracos, sem deformar a geometria.
+function shiftLatLngs(points, deltaLat, deltaLng) {
+  return points.map((point) => Array.isArray(point)
+    ? shiftLatLngs(point, deltaLat, deltaLng)
+    : L.latLng(point.lat + deltaLat, point.lng + deltaLng, point.alt));
 }
 
 // O GeoJSON não tem geometria nativa de círculo. Converte o círculo desenhado
@@ -130,6 +252,54 @@ function circleAsPolygon(circle, appearance) {
     vertices.push([latitude, longitude]);
   }
   return L.polygon(vertices, vectorStyle(appearance));
+}
+
+// Estes campos já têm significado no editor e não devem ser sobrescritos
+// pelos atributos livres inseridos pelo administrador.
+const RESERVED_PROPERTIES = new Set([
+  "nome", "descricao", "estilo", "forma", "name", "title",
+  "area_m2", "perimetro_m", "comprimento_m",
+  "__proto__", "prototype", "constructor",
+]);
+const ATTRIBUTE_KEY_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} _-]{0,59}$/u;
+
+function detailsFromLayer(layer) {
+  const properties = layer.feature?.properties || {};
+  return {
+    nome: String(properties.nome || ""),
+    descricao: String(properties.descricao || ""),
+    atributos: Object.entries(properties)
+      .filter(([key]) => !RESERVED_PROPERTIES.has(key.toLocaleLowerCase("pt-BR")))
+      .map(([chave, valor], index) => ({
+        id: index + 1,
+        chave,
+        valor: valor == null ? "" : String(valor),
+      })),
+  };
+}
+
+function validatedAttributes(draft) {
+  const name = draft.nome.trim();
+  if (!name) throw new Error("Informe um nome para o desenho.");
+  const seen = new Set();
+  const entries = [];
+  for (const item of draft.atributos) {
+    const key = item.chave.trim().replace(/\s+/g, " ");
+    const value = item.valor.trim();
+    if (!key && !value) continue;
+    if (!key || !value) throw new Error("Preencha tanto o nome quanto o valor de cada atributo.");
+    if (!ATTRIBUTE_KEY_PATTERN.test(key)) {
+      throw new Error(`O atributo “${key}” possui caracteres inválidos ou excede 60 caracteres.`);
+    }
+    const normalized = key.toLocaleLowerCase("pt-BR");
+    if (RESERVED_PROPERTIES.has(normalized)) {
+      throw new Error(`“${key}” é um nome reservado. Escolha outro nome de atributo.`);
+    }
+    if (seen.has(normalized)) throw new Error(`O atributo “${key}” foi informado mais de uma vez.`);
+    seen.add(normalized);
+    entries.push([key, value]);
+  }
+  return { nome: name, descricao: draft.descricao.trim(), entries };
 }
 
 function ToolButton({ label, icon, active, onClick, disabled }) {
@@ -182,7 +352,7 @@ function ResizeMap() {
  * polígonos/linhas nem depende do drag handler do Leaflet Draw para formas.
  * O Leaflet Draw continua responsável pela edição de vértices existentes.
  */
-function DrawingBridge({ command, appearance, featureName, groupRef, actionsRef, onChanged, onDone, onProgress, onError }) {
+function DrawingBridge({ command, appearance, featureName, initialGeojson, groupRef, actionsRef, onChanged, onDone, onProgress, onError }) {
   const map = useMap();
   const editorRef = useRef(null);
   const nextNameRef = useRef(featureName);
@@ -217,9 +387,73 @@ function DrawingBridge({ command, appearance, featureName, groupRef, actionsRef,
           L.DomEvent.stopPropagation(event);
           applyAppearance(layer, appearanceRef.current);
           changedRef.current();
+        } else if (commandRef.current === "remove-vertex") {
+          L.DomEvent.stopPropagation(event);
+          actionsRef.current.selectVertices?.(layer);
         }
       });
+      layer.on("mousedown", (event) => {
+        if (commandRef.current !== "move") return;
+        L.DomEvent.stopPropagation(event);
+        actionsRef.current.startMove?.(layer, event);
+      });
     };
+
+    // Reutilizada ao importar, restaurar histórico e duplicar uma feição.
+    // Mantemos os atributos e as cores originais em properties.estilo.
+    const addGeojson = (geojson) => {
+      const imported = L.geoJSON(geojson, {
+        pointToLayer: (feature, latlng) => L.marker(latlng, {
+          icon: dotIcon(styleFromGeojson(feature)),
+        }),
+        style: (feature) => vectorStyle(styleFromGeojson(feature)),
+      });
+      const addImportedLayer = (layer, inheritedFeature) => {
+        const feature = layer.feature || inheritedFeature;
+        if (layer instanceof L.LayerGroup) {
+          layer.eachLayer((child) => addImportedLayer(child, feature));
+          return;
+        }
+        if (!(layer instanceof L.Marker || layer instanceof L.Polyline)) return;
+        const properties = { ...(feature?.properties || {}) };
+        if (!properties.nome) properties.nome = properties.distrito || properties.name ||
+          properties.title || `Feição ${group.getLayers().length + 1}`;
+        layer.feature = { type: "Feature", properties };
+        handleLayerClick(layer);
+        group.addLayer(layer);
+      };
+      imported.eachLayer((layer) => addImportedLayer(layer, layer.feature));
+    };
+
+    actionsRef.current.loadSnapshot = (collection) => {
+      group.clearLayers();
+      addGeojson(collection);
+      changedRef.current();
+    };
+    actionsRef.current.duplicate = (id) => {
+      const original = group.getLayers().find((layer) => L.stamp(layer) === id);
+      if (!original) return;
+      const copy = JSON.parse(JSON.stringify(original.toGeoJSON()));
+      copy.properties = { ...(copy.properties || {}), nome: `${copy.properties?.nome || "Desenho"} (cópia)` };
+      addGeojson(copy);
+      changedRef.current();
+    };
+    actionsRef.current.focus = (id) => {
+      const layer = group.getLayers().find((item) => L.stamp(item) === id);
+      if (!layer) return;
+      if (layer instanceof L.Marker) map.setView(layer.getLatLng(), Math.max(map.getZoom(), 16));
+      else if (layer.getBounds?.().isValid()) map.fitBounds(layer.getBounds().pad(0.2), { maxZoom: 18 });
+    };
+
+    // Importação inicial: registra também o estado inicial para o histórico.
+    if (initialGeojson) {
+      addGeojson(initialGeojson);
+      const bounds = group.getBounds();
+      if (bounds.isValid()) map.fitBounds(bounds.pad(0.12), { maxZoom: 17 });
+    }
+    queueMicrotask(() => {
+      if (groupRef.current === group) changedRef.current();
+    });
 
     actionsRef.current.addFeature = (layer, shape) => {
       const count = group.getLayers().length + 1;
@@ -258,9 +492,14 @@ function DrawingBridge({ command, appearance, featureName, groupRef, actionsRef,
       actionsRef.current.undoVertex = null;
       actionsRef.current.fit = null;
       actionsRef.current.commitEdit = null;
+      actionsRef.current.loadSnapshot = null;
+      actionsRef.current.duplicate = null;
+      actionsRef.current.focus = null;
+      actionsRef.current.selectVertices = null;
+      actionsRef.current.startMove = null;
       group.removeFrom(map);
     };
-  }, [map, groupRef, actionsRef]);
+  }, [map, groupRef, actionsRef, initialGeojson]);
 
   useEffect(() => {
     // Não reiniciar uma ferramenta quando o nome, cor ou contador mudar.
@@ -275,20 +514,138 @@ function DrawingBridge({ command, appearance, featureName, groupRef, actionsRef,
     if (kind === "edit") {
       const group = groupRef.current;
       if (!group || !group.getLayers().length) return undefined;
-      const edit = new L.EditToolbar.Edit(map, { featureGroup: group });
-      editorRef.current = edit;
-      edit.enable();
+      const edit = new L.EditToolbar.Edit(map, {
+        featureGroup: group,
+        selectedPathOptions: { maintainColor: true, opacity: 0.7 },
+      });
+      let finished = false;
       const onEdited = () => changedRef.current();
       map.on(L.Draw.Event.EDITED, onEdited);
-      return () => {
-        edit.save();
+      editorRef.current = edit;
+      edit.enable();
+      const finishEdit = () => {
+        if (finished) return;
+        finished = true;
+        edit.save(); // Emite draw:edited somente se algo mudou.
         edit.disable();
-        map.off(L.Draw.Event.EDITED, onEdited);
         if (editorRef.current === edit) editorRef.current = null;
+      };
+      actions.commitEdit = finishEdit;
+      return () => {
+        finishEdit();
+        map.off(L.Draw.Event.EDITED, onEdited);
+        if (actions.commitEdit === finishEdit) actions.commitEdit = null;
+      };
+    }
+
+    if (kind === "remove-vertex") {
+      const markers = L.layerGroup().addTo(map);
+      const showVertices = (layer) => {
+        markers.clearLayers();
+        if (!(layer instanceof L.Polyline)) {
+          errorRef.current("Escolha uma linha ou polígono. Pontos não possuem vértices removíveis.");
+          return;
+        }
+        const polygon = layer instanceof L.Polygon;
+        const geometry = layer.getLatLngs();
+        const ring = polygon ? geometry[0] : geometry;
+        if (!Array.isArray(ring) || !ring.length || Array.isArray(ring[0])) {
+          errorRef.current("Esta geometria possui múltiplas partes. A remoção individual de vértices está disponível para linhas e polígonos simples.");
+          return;
+        }
+        ring.forEach((latlng, index) => {
+          const handle = L.circleMarker(latlng, {
+            radius: 7, color: "#fff", weight: 2, fillColor: "#dc2626",
+            fillOpacity: 1, bubblingMouseEvents: false, pane: "markerPane",
+          }).addTo(markers);
+          handle.bindTooltip(`Remover vértice ${index + 1}`, { direction: "top" });
+          handle.on("click", (event) => {
+            L.DomEvent.stopPropagation(event);
+            const original = polygon ? layer.getLatLngs()[0] : layer.getLatLngs();
+            const minimum = polygon ? 3 : 2;
+            if (original.length <= minimum) {
+              errorRef.current(`Não é possível remover: ${polygon ? "polígonos" : "linhas"} precisam de pelo menos ${minimum} vértices.`);
+              return;
+            }
+            const reduced = original.filter((_, i) => i !== index);
+            if (polygon) layer.setLatLngs([reduced, ...layer.getLatLngs().slice(1)]);
+            else layer.setLatLngs(reduced);
+            layer.redraw();
+            changedRef.current();
+            showVertices(layer);
+          });
+        });
+      };
+      actions.selectVertices = showVertices;
+      return () => {
+        actions.selectVertices = null;
+        markers.removeFrom(map);
       };
     }
 
     if (kind === "erase" || kind === "paint") return undefined;
+
+    if (kind === "move") {
+      // Mover toda a feição é diferente de mover seus vértices individualmente.
+      // A forma é transladada apenas enquanto o botão estiver pressionado;
+      // registramos UMA entrada no histórico ao soltar o mouse.
+      const originalDragging = map.dragging.enabled();
+      if (originalDragging) map.dragging.disable();
+      const container = map.getContainer();
+      const previousCursor = container.style.cursor;
+      container.style.cursor = "grab";
+      let movement = null;
+
+      const startMove = (layer, event) => {
+        const nativeEvent = event.originalEvent;
+        if (!nativeEvent || nativeEvent.button !== 0 || movement) return;
+        nativeEvent.preventDefault();
+        const anchor = map.mouseEventToLatLng(nativeEvent);
+        movement = {
+          layer,
+          anchor,
+          originalPoint: layer instanceof L.Marker ? layer.getLatLng() : null,
+          originalLines: layer instanceof L.Polyline ? layer.getLatLngs() : null,
+          moved: false,
+        };
+        container.style.cursor = "grabbing";
+      };
+      const movePointer = (event) => {
+        if (!movement || (event.buttons === 0 && event.pointerType !== "touch")) return;
+        const current = map.mouseEventToLatLng(event);
+        const deltaLat = current.lat - movement.anchor.lat;
+        const deltaLng = current.lng - movement.anchor.lng;
+        if (Math.abs(deltaLat) + Math.abs(deltaLng) > 0.0000001) movement.moved = true;
+        if (movement.originalPoint) {
+          movement.layer.setLatLng(L.latLng(
+            movement.originalPoint.lat + deltaLat,
+            movement.originalPoint.lng + deltaLng
+          ));
+        } else if (movement.originalLines) {
+          movement.layer.setLatLngs(shiftLatLngs(movement.originalLines, deltaLat, deltaLng));
+        }
+      };
+      const endMove = () => {
+        if (!movement) return;
+        const didMove = movement.moved;
+        movement = null;
+        container.style.cursor = "grab";
+        if (didMove) changedRef.current();
+      };
+      actions.startMove = startMove;
+      document.addEventListener("pointermove", movePointer);
+      document.addEventListener("pointerup", endMove);
+      document.addEventListener("pointercancel", endMove);
+      return () => {
+        document.removeEventListener("pointermove", movePointer);
+        document.removeEventListener("pointerup", endMove);
+        document.removeEventListener("pointercancel", endMove);
+        if (movement) endMove();
+        actions.startMove = null;
+        container.style.cursor = previousCursor;
+        if (originalDragging) map.dragging.enable();
+      };
+    }
 
     const wasDragging = map.dragging.enabled();
     const wasDoubleClick = map.doubleClickZoom.enabled();
@@ -298,39 +655,32 @@ function DrawingBridge({ command, appearance, featureName, groupRef, actionsRef,
     if (kind === "point" || kind === "line" || kind === "polygon") {
       const vertices = [];
       let sketch = null;
+      let closingIndicator = null;
       let previewPoint = null;
 
       const redraw = () => {
         progressRef.current(vertices.length);
         if (kind === "point") return;
         if (sketch) map.removeLayer(sketch);
+        if (closingIndicator) map.removeLayer(closingIndicator);
         sketch = null;
+        closingIndicator = null;
         if (!vertices.length) return;
         const coords = previewPoint ? [...vertices, previewPoint] : vertices;
-        // A linha permanece aberta até o comando explícito "Concluir".
         sketch = L.polyline(coords, {
           ...vectorStyle(appearanceRef.current),
           interactive: false,
           bubblingMouseEvents: false,
         }).addTo(map);
+        if (vertices.length >= (kind === "polygon" ? 3 : 2)) {
+          const anchor = kind === "polygon" ? vertices[0] : vertices[vertices.length - 1];
+          closingIndicator = L.circleMarker(anchor, {
+            radius: 7, weight: 2, color: "#ffffff", fillColor: "#16a34a",
+            fillOpacity: 0.95, interactive: false,
+          }).addTo(map);
+        }
       };
 
-      const handleClick = (event) => {
-        if (kind === "point") {
-          actions.addFeature(L.marker(event.latlng, { icon: dotIcon(appearanceRef.current) }), "point");
-          return;
-        }
-        // Alguns navegadores emitem um clique extra em sequência de duplo clique.
-        // A conclusão, porém, só acontece pelo botão do formulário.
-        vertices.push(event.latlng);
-        previewPoint = null;
-        redraw();
-      };
-      const handleMove = (event) => {
-        if (!vertices.length || kind === "point") return;
-        previewPoint = event.latlng;
-        redraw();
-      };
       const finish = () => {
         const minimum = kind === "line" ? 2 : 3;
         if (vertices.length < minimum) {
@@ -342,6 +692,31 @@ function DrawingBridge({ command, appearance, featureName, groupRef, actionsRef,
           ? L.polyline(vertices, style)
           : L.polygon(vertices, style);
         actions.addFeature(layer, kind);
+      };
+      const handleClick = (event) => {
+        if (kind === "point") {
+          actions.addFeature(L.marker(event.latlng, { icon: dotIcon(appearanceRef.current) }), "point");
+          return;
+        }
+        // Encerramento intuitivo por proximidade: 12 px na tela,
+        // independente do nível de zoom. Conservamos o botão "Concluir".
+        const minimum = kind === "polygon" ? 3 : 2;
+        if (vertices.length >= minimum) {
+          const finalVertex = kind === "polygon" ? vertices[0] : vertices[vertices.length - 1];
+          const distancePx = map.latLngToContainerPoint(finalVertex).distanceTo(event.containerPoint);
+          if (distancePx <= 12) {
+            finish();
+            return;
+          }
+        }
+        vertices.push(event.latlng);
+        previewPoint = null;
+        redraw();
+      };
+      const handleMove = (event) => {
+        if (!vertices.length || kind === "point") return;
+        previewPoint = event.latlng;
+        redraw();
       };
       const undoVertex = () => {
         vertices.pop();
@@ -356,7 +731,9 @@ function DrawingBridge({ command, appearance, featureName, groupRef, actionsRef,
         map.off("click", handleClick);
         map.off("mousemove", handleMove);
         if (sketch) map.removeLayer(sketch);
+        if (closingIndicator) map.removeLayer(closingIndicator);
         sketch = null;
+        closingIndicator = null;
         actions.finishShape = null;
         actions.undoVertex = null;
         if (wasDoubleClick) map.doubleClickZoom.enable();
@@ -461,9 +838,12 @@ function DrawingBridge({ command, appearance, featureName, groupRef, actionsRef,
 }
 
 /** Editor independente do painel Medição e do Map.jsx. */
-export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false }) {
+export default function GeoJSONDrawingEditor({ onSave, onCancel, initialGeojson = null, saving = false }) {
   const groupRef = useRef(null);
   const actionsRef = useRef({ fit: null, commitEdit: null, addFeature: null, finishShape: null, undoVertex: null });
+  // Histórico por versões do FeatureCollection, incluindo posições e medidas calculadas.
+  const historyRef = useRef({ snapshots: [], cursor: -1, restoring: false });
+  const [historyButtons, setHistoryButtons] = useState({ undo: false, redo: false });
   const [expanded, setExpanded] = useState(false);
   const [command, setCommand] = useState({ kind: null, serial: 0 });
   const [featureName, setFeatureName] = useState("");
@@ -471,12 +851,16 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
   const [features, setFeatures] = useState([]);
   const [sketchCount, setSketchCount] = useState(0);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [detailDraft, setDetailDraft] = useState({ nome: "", descricao: "", atributos: [] });
+  const attributeSequence = useRef(0);
   const onDrawingError = useCallback((message) => setError(message), []);
 
   const syncFeatures = useCallback(() => {
     const group = groupRef.current;
     if (!group) return;
     setFeatures(group.getLayers().map((layer) => {
+      updateLayerMeasurements(layer);
       const geo = layer.toGeoJSON();
       return {
         id: L.stamp(layer),
@@ -487,6 +871,22 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
         measure: metricForLayer(layer),
       };
     }));
+    const history = historyRef.current;
+    if (history.restoring) return;
+    const json = JSON.stringify(group.toGeoJSON());
+    if (history.snapshots[history.cursor] !== json) {
+      history.snapshots = history.snapshots.slice(0, history.cursor + 1);
+      history.snapshots.push(json);
+      // Evita manter dezenas de cópias grandes do mesmo GeoJSON em memória.
+      const MAX_HISTORY = 30;
+      const MAX_BYTES = 20 * 1024 * 1024;
+      while (history.snapshots.length > 1 && (
+        history.snapshots.length > MAX_HISTORY ||
+        history.snapshots.reduce((bytes, entry) => bytes + entry.length, 0) > MAX_BYTES
+      )) history.snapshots.shift();
+      history.cursor = history.snapshots.length - 1;
+    }
+    setHistoryButtons({ undo: history.cursor > 0, redo: history.cursor < history.snapshots.length - 1 });
   }, []);
 
   const stopTool = useCallback(() => {
@@ -504,12 +904,83 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
 
   const getLayer = (id) => groupRef.current?.getLayers().find((layer) => L.stamp(layer) === id);
 
+  // Os dados são guardados na própria feição do Leaflet. Assim, serão
+  // incluídos pelo group.toGeoJSON() sem mudanças no Laravel.
+  const beginDetails = (id) => {
+    if (saving) return;
+    const layer = getLayer(id);
+    if (!layer) return;
+    actionsRef.current.commitEdit?.();
+    stopTool();
+    const draft = detailsFromLayer(layer);
+    draft.atributos = draft.atributos.map((item) => ({
+      ...item, id: ++attributeSequence.current,
+    }));
+    setDetailDraft(draft);
+    setEditingId(id);
+    setError("");
+  };
+
+  const persistDetails = () => {
+    if (editingId === null) return true;
+    const layer = getLayer(editingId);
+    if (!layer) {
+      setEditingId(null);
+      setError("O desenho selecionado já não está disponível.");
+      return false;
+    }
+    try {
+      const data = validatedAttributes(detailDraft);
+      const previous = layer.feature?.properties || {};
+      // Preserva a forma original e os estilos já aplicados.
+      const properties = {
+        ...(previous.forma ? { forma: previous.forma } : {}),
+        ...(previous.estilo ? { estilo: previous.estilo } : {}),
+        nome: data.nome,
+        ...(data.descricao ? { descricao: data.descricao } : {}),
+      };
+      for (const [key, value] of data.entries) properties[key] = value;
+      layer.feature = { type: "Feature", properties };
+      syncFeatures();
+      setEditingId(null);
+      setError("");
+      return true;
+    } catch (exception) {
+      setError(exception.message);
+      return false;
+    }
+  };
+
+  const addAttribute = () => {
+    setDetailDraft((current) => ({
+      ...current,
+      atributos: [...current.atributos, { id: ++attributeSequence.current, chave: "", valor: "" }],
+    }));
+  };
+
+  const changeAttribute = (id, field, value) => {
+    setDetailDraft((current) => ({
+      ...current,
+      atributos: current.atributos.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      ),
+    }));
+  };
+
+  const removeAttribute = (id) => {
+    setDetailDraft((current) => ({
+      ...current,
+      atributos: current.atributos.filter((item) => item.id !== id),
+    }));
+  };
+
   const deleteOne = (id) => {
     if (saving) return;
     actionsRef.current.commitEdit?.();
     stopTool();
     const layer = getLayer(id);
     if (layer) groupRef.current.removeLayer(layer);
+    if (editingId === id) setEditingId(null);
     syncFeatures();
   };
 
@@ -521,26 +992,38 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
     syncFeatures();
   };
 
-  const undoLast = () => {
+  // Restauramos a geometria E os atributos/estilos da versão anterior.
+  const travelHistory = (direction) => {
     actionsRef.current.commitEdit?.();
+    const history = historyRef.current;
+    const nextIndex = history.cursor + direction;
+    if (nextIndex < 0 || nextIndex >= history.snapshots.length) return;
     stopTool();
-    const group = groupRef.current;
-    const items = group?.getLayers() || [];
-    if (items.length) group.removeLayer(items[items.length - 1]);
-    syncFeatures();
-    setError("");
+    setEditingId(null);
+    history.cursor = nextIndex;
+    history.restoring = true;
+    try {
+      actionsRef.current.loadSnapshot?.(JSON.parse(history.snapshots[nextIndex]));
+      setHistoryButtons({ undo: nextIndex > 0, redo: nextIndex < history.snapshots.length - 1 });
+      setError("");
+    } finally {
+      history.restoring = false;
+    }
   };
 
   const clearAll = () => {
     actionsRef.current.commitEdit?.();
     stopTool();
     groupRef.current?.clearLayers();
+    setEditingId(null);
     syncFeatures();
     setError("");
   };
 
   const saveDrawing = () => {
+    if (editingId !== null && !persistDetails()) return;
     actionsRef.current.commitEdit?.();
+    groupRef.current?.getLayers().forEach(updateLayerMeasurements);
     const content = groupRef.current?.toGeoJSON();
     if (!content?.features?.length) {
       setError("Adicione pelo menos uma feição antes de continuar.");
@@ -551,6 +1034,7 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
     onSave?.(content);
   };
 
+  // Nunca sobrescrever o arquivo anterior: o modal envia o resultado como novo GeoJSON.
   // O editor permanece no mesmo portal DOM ao alternar tamanhos; mapa e desenhos não são remontados.
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -573,13 +1057,33 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
     return () => document.removeEventListener("keydown", onEscape, true);
   }, [saving, expanded, command.kind, onCancel, stopTool]);
 
+  useEffect(() => {
+    const hotkeys = (event) => {
+      if (!(event.ctrlKey || event.metaKey) || saving) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable='true']")) return;
+      if (event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        // Atalho será acionado pelo clique nos botões para evitar closures antigas.
+        document.getElementById(event.shiftKey ? "sobral-redo-history" : "sobral-undo-history")?.click();
+      } else if (event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        document.getElementById("sobral-redo-history")?.click();
+      }
+    };
+    document.addEventListener("keydown", hotkeys);
+    return () => document.removeEventListener("keydown", hotkeys);
+  }, [saving]);
+
   const instructions = {
     point: "Clique no mapa para adicionar um ponto.",
-    line: "Clique para adicionar vértices e pressione Concluir linha.",
-    polygon: "Clique para adicionar quantos vértices desejar e pressione Concluir polígono.",
+    line: "Clique para traçar a linha. Para finalizar, clique novamente no último vértice (círculo verde) ou use Concluir linha.",
+    polygon: "Clique para marcar os vértices. Para fechar, clique novamente no primeiro vértice (círculo verde) ou use Concluir polígono.",
     rectangle: "Pressione o mouse no mapa, arraste e solte para criar um retângulo.",
     circle: "Pressione no centro, arraste para definir o raio e solte o mouse.",
-    edit: "Arraste vértices ou pontos; clique em Concluir edição quando terminar.",
+    edit: "Arraste os vértices. Para apagar apenas um, escolha Remover vértice.",
+    move: "Clique e arraste um desenho para mudar sua posição inteira, sem deformar os vértices.",
+    "remove-vertex": "Clique em uma linha ou polígono; depois clique no marcador vermelho do vértice que deseja remover.",
     erase: "Clique sobre uma feição para removê-la.",
     paint: "Clique sobre uma feição para aplicar o estilo selecionado.",
   };
@@ -590,7 +1094,7 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
         className={`flex min-h-0 flex-col overflow-hidden bg-white shadow-2xl ${expanded ? "h-[100dvh] w-screen rounded-none" : "h-[100dvh] w-screen rounded-none md:h-[min(94dvh,860px)] md:w-[min(96vw,1250px)] md:rounded-2xl"}`}>
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
           <div>
-            <h2 className="flex items-center gap-2 text-base font-black text-slate-800"><Layers size={19} className="text-blue-700" /> Editor de camadas GeoJSON</h2>
+            <h2 className="flex items-center gap-2 text-base font-black text-slate-800"><Layers size={19} className="text-blue-700" /> {initialGeojson ? "Editar geometrias GeoJSON" : "Editor de camadas GeoJSON"}</h2>
             <p className="text-xs text-slate-500">Desenhe, configure a aparência e organize suas feições.</p>
           </div>
           <div className="flex gap-2">
@@ -649,10 +1153,18 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
             <section className="space-y-2" aria-label="Ferramentas para modificar desenhos">
               <h3 className="text-xs font-black text-slate-700">Modificar desenhos</h3>
               <div className="grid grid-cols-2 gap-2">
-                <ToolButton label="Editar vértices" icon={<Pencil size={16}/>} active={command.kind === "edit"} disabled={saving || features.length === 0} onClick={() => chooseTool("edit")}/>
-                <ToolButton label="Excluir no mapa" icon={<Eraser size={16}/>} active={command.kind === "erase"} disabled={saving || features.length === 0} onClick={() => chooseTool("erase")}/>
+                <ToolButton label="Mover vértices" icon={<Pencil size={16}/>} active={command.kind === "edit"} disabled={saving || features.length === 0} onClick={() => chooseTool("edit")}/>
+                <ToolButton label="Arrastar desenho" icon={<Hand size={16}/>} active={command.kind === "move"} disabled={saving || features.length === 0} onClick={() => chooseTool("move")}/>
+                <ToolButton label="Remover vértice" icon={<Crosshair size={16}/>} active={command.kind === "remove-vertex"} disabled={saving || features.length === 0} onClick={() => chooseTool("remove-vertex")}/>
+                <ToolButton label="Excluir desenho" icon={<Eraser size={16}/>} active={command.kind === "erase"} disabled={saving || features.length === 0} onClick={() => chooseTool("erase")}/>
                 <ToolButton label="Aplicar estilo" icon={<Paintbrush size={16}/>} active={command.kind === "paint"} disabled={saving || features.length === 0} onClick={() => chooseTool("paint")}/>
               </div>
+              {command.kind === "move" && (
+                <p className="rounded-lg bg-blue-50 p-2 text-[11px] text-blue-700">Clique sobre um desenho, segure o botão do mouse e arraste para reposicionar a geometria inteira. Solte para registrar a alteração no histórico.</p>
+              )}
+              {command.kind === "remove-vertex" && (
+                <p className="rounded-lg bg-red-50 p-2 text-[11px] text-red-700">Clique em uma linha ou polígono e depois no ponto vermelho que deseja excluir. Mínimo: 2 vértices para linhas e 3 para polígonos.</p>
+              )}
               {command.kind === "edit" && (
                 <button type="button" onClick={() => { actionsRef.current.commitEdit?.(); stopTool(); syncFeatures(); }}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white hover:bg-emerald-700">
@@ -714,6 +1226,19 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
                           onChange={(event) => renameOne(item.id, event.target.value)}
                           className="w-full min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs font-semibold text-slate-800 focus:border-blue-300 focus:bg-white" />
                       </div>
+                      <button type="button" onClick={() => actionsRef.current.focus?.(item.id)} disabled={saving}
+                        title="Localizar no mapa" aria-label={`Centralizar em ${item.name}`}
+                        className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-blue-50 disabled:opacity-40"><LocateFixed size={14}/></button>
+                      <button type="button" onClick={() => { actionsRef.current.commitEdit?.(); stopTool(); actionsRef.current.duplicate?.(item.id); }} disabled={saving}
+                        title="Duplicar este desenho" aria-label={`Duplicar ${item.name}`}
+                        className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-blue-50 disabled:opacity-40"><Copy size={14}/></button>
+                      <button type="button" onClick={() => beginDetails(item.id)} disabled={saving}
+                        title={`Editar informações de ${item.name}`} aria-label={`Editar informações de ${item.name}`}
+                        className={`rounded-lg border p-2 disabled:opacity-40 ${editingId === item.id
+                          ? "border-blue-500 bg-blue-100 text-blue-700"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"}`}>
+                        <FileText size={14}/>
+                      </button>
                       <button type="button" onClick={() => deleteOne(item.id)} disabled={saving} title="Excluir este desenho"
                         className="rounded-lg border border-slate-200 bg-white p-2 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"><Trash2 size={14}/></button>
                     </div>
@@ -721,6 +1246,67 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
                 </div>
               )}
             </section>
+
+            {editingId !== null && (
+              <section className="space-y-3 rounded-xl border border-blue-200 bg-white p-3" aria-label="Informações do desenho">
+                <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                  <h3 className="flex items-center gap-2 text-xs font-bold text-blue-800">
+                    <FileText size={16}/> Informações do desenho
+                  </h3>
+                  <button type="button" onClick={() => { setEditingId(null); setError(""); }}
+                    className="rounded-lg p-1 text-slate-500 hover:bg-slate-100" title="Cancelar edição das informações">
+                    <X size={16}/>
+                  </button>
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="geojson-detail-name" className="text-xs font-semibold text-slate-700">Nome *</label>
+                  <input id="geojson-detail-name" maxLength={120} value={detailDraft.nome} disabled={saving}
+                    onChange={(event) => setDetailDraft((old) => ({ ...old, nome: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="geojson-detail-description" className="text-xs font-semibold text-slate-700">Descrição</label>
+                  <textarea id="geojson-detail-description" rows={2} maxLength={1000}
+                    placeholder="Ex.: Área destinada à preservação ambiental."
+                    value={detailDraft.descricao} disabled={saving}
+                    onChange={(event) => setDetailDraft((old) => ({ ...old, descricao: event.target.value }))}
+                    className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-semibold text-slate-700">Atributos personalizados</label>
+                    <button type="button" onClick={addAttribute} disabled={saving || detailDraft.atributos.length >= 30}
+                      className="inline-flex items-center gap-1 rounded-lg border border-blue-200 px-2 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-40">
+                      <Plus size={13}/> Adicionar
+                    </button>
+                  </div>
+                  {detailDraft.atributos.length === 0 && (
+                    <p className="text-[11px] text-slate-500">Adicione informações como tipo, responsável ou capacidade.</p>
+                  )}
+                  {detailDraft.atributos.map((item) => (
+                    <div key={item.id} className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-2">
+                      <div className="flex items-center gap-1">
+                        <input aria-label="Nome do atributo" placeholder="Ex.: Tipo" maxLength={60} disabled={saving}
+                          value={item.chave} onChange={(event) => changeAttribute(item.id, "chave", event.target.value)}
+                          className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500" />
+                        <button type="button" onClick={() => removeAttribute(item.id)} disabled={saving}
+                          title="Remover atributo" className="rounded-lg border border-red-100 p-1.5 text-red-500 hover:bg-red-50">
+                          <Trash2 size={14}/>
+                        </button>
+                      </div>
+                      <input aria-label="Valor do atributo" placeholder="Valor" maxLength={500} disabled={saving}
+                        value={item.valor} onChange={(event) => changeAttribute(item.id, "valor", event.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500" />
+                    </div>
+                  ))}
+                </div>
+                <button type="button" onClick={persistDetails} disabled={saving}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-3 py-2.5 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-40">
+                  <Save size={15}/> Salvar informações
+                </button>
+                <p className="text-[11px] text-slate-500">Os atributos serão incluídos no arquivo GeoJSON quando você usar o desenho nesta camada.</p>
+              </section>
+            )}
           </aside>
 
           <div className="relative min-h-[200px] flex-1 overflow-hidden rounded-xl border border-slate-200" aria-label="Mapa de desenho">
@@ -728,6 +1314,7 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
               <DrawingBridge command={command} appearance={appearance} featureName={featureName}
+                initialGeojson={initialGeojson}
                 groupRef={groupRef} actionsRef={actionsRef} onChanged={syncFeatures} onDone={stopTool}
                 onProgress={setSketchCount} onError={onDrawingError} />
               <ResizeMap />
@@ -747,8 +1334,10 @@ export default function GeoJSONDrawingEditor({ onSave, onCancel, saving = false 
           {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</p>}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={saving || !features.length} onClick={undoLast}
-                className={`${BUTTON} border-slate-200 text-slate-700 hover:bg-slate-100`}><Undo2 size={15}/> Desfazer última</button>
+              <button id="sobral-undo-history" type="button" disabled={saving || (!historyButtons.undo && command.kind !== "edit")} onClick={() => travelHistory(-1)}
+                title="Desfazer a última alteração (Ctrl+Z)" className={`${BUTTON} border-slate-200 text-slate-700 hover:bg-slate-100`}><Undo2 size={15}/> Desfazer</button>
+              <button id="sobral-redo-history" type="button" disabled={saving || !historyButtons.redo} onClick={() => travelHistory(1)}
+                title="Refazer alteração (Ctrl+Y)" className={`${BUTTON} border-slate-200 text-slate-700 hover:bg-slate-100`}><Redo2 size={15}/> Refazer</button>
               <button type="button" disabled={saving || !features.length} onClick={clearAll}
                 className={`${BUTTON} border-red-200 text-red-600 hover:bg-red-50`}><RotateCcw size={15}/> Limpar tudo</button>
             </div>

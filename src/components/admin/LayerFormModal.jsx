@@ -65,6 +65,9 @@ export default function LayerFormModal({
   const [filesError, setFilesError] = useState("");
   const [fileSuccess, setFileSuccess] = useState("");
   const [drawingOpen, setDrawingOpen] = useState(false);
+  const [drawingMode, setDrawingMode] = useState("new");
+  const [drawingInitialData, setDrawingInitialData] = useState(null);
+  const [drawingLoading, setDrawingLoading] = useState(false);
   // O caminho é interno ao formulário; administradores escolhem pelo nome do arquivo.
   const selectedGeojsonPath = form.geojson_path.trim();
   const isLegacyGeojson = selectedGeojsonPath.startsWith("/geodata/");
@@ -187,6 +190,40 @@ export default function LayerFormModal({
     }
   };
 
+  // Abre uma cópia da camada existente para edição. O arquivo publicado fica
+  // intacto até que o administrador confirme "Salvar alterações".
+  const handleEditExistingGeojson = async () => {
+    const path = form.geojson_path.trim();
+    if (!GEOJSON_PATH_PATTERN.test(path) || drawingLoading || fileUploading) return;
+    setFilesError("");
+    setDrawingLoading(true);
+    try {
+      let data;
+      if (path.startsWith("/api/geodata/")) {
+        const filename = path.slice("/api/geodata/".length);
+        data = await getGeojsonFileContent(filename);
+      } else {
+        const response = await fetch(path);
+        if (!response.ok) throw new Error("O arquivo selecionado não está disponível.");
+        data = await response.json();
+      }
+      if (!data || !["FeatureCollection", "Feature", "GeometryCollection"].includes(data.type)) {
+        throw new Error("O arquivo não contém feições GeoJSON editáveis.");
+      }
+      const sample = L.geoJSON(data);
+      if (!sample.getLayers().length || !sample.getBounds().isValid()) {
+        throw new Error("Nenhuma geometria válida foi encontrada no arquivo.");
+      }
+      setDrawingInitialData(data);
+      setDrawingMode("edit");
+      setDrawingOpen(true);
+    } catch (error) {
+      setFilesError(getFriendlyGeojsonApiError(error));
+    } finally {
+      setDrawingLoading(false);
+    }
+  };
+
   const handleSaveDrawing = async (geojson) => {
     if (!geojson?.features?.length) return;
     const suffix = Date.now();
@@ -219,7 +256,9 @@ export default function LayerFormModal({
         geojsonPath: uploaded.geojson_path,
       });
       setDrawingOpen(false);
-      setFileSuccess("Desenho armazenado! Confira a prévia e complete o cadastro da camada.");
+      setFileSuccess(isEditing
+        ? "Nova versão salva! Confira a prévia e clique em Salvar alterações para atualizar esta camada. O arquivo anterior foi preservado."
+        : "Desenho armazenado! Confira a prévia e complete o cadastro da camada.");
       const files = await listGeojsonFiles();
       setStoredGeojsonFiles(Array.isArray(files) ? files : []);
     } catch (error) {
@@ -565,15 +604,36 @@ export default function LayerFormModal({
                       </div>
                       <button
                         type="button"
-                        disabled={loading || fileUploading}
-                        onClick={() => setDrawingOpen((value) => !value)}
-                        aria-expanded={drawingOpen}
+                        disabled={loading || fileUploading || drawingLoading}
+                        onClick={() => {
+                          if (drawingOpen) {
+                            setDrawingOpen(false);
+                          } else {
+                            setDrawingMode("new");
+                            setDrawingInitialData(null);
+                            setDrawingOpen(true);
+                          }
+                        }}
+                        aria-expanded={drawingOpen && drawingMode === "new"}
                         className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
                       >
                         <PenTool size={17} /> {drawingOpen ? "Fechar editor de desenho" : "Desenhar nova camada no mapa"}
                       </button>
+                      {isEditing && selectedGeojsonPath && (
+                        <button
+                          type="button"
+                          disabled={loading || fileUploading || drawingLoading || drawingOpen}
+                          onClick={handleEditExistingGeojson}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
+                        >
+                          {drawingLoading ? <Loader2 size={17} className="animate-spin" /> : <PenTool size={17} />}
+                          {drawingLoading ? "Carregando desenhos..." : "Editar geometrias desta camada"}
+                        </button>
+                      )}
                       {drawingOpen && (
                         <GeoJSONDrawingEditor
+                          key={drawingMode === "edit" ? `edit-${selectedGeojsonPath}` : "new"}
+                          initialGeojson={drawingMode === "edit" ? drawingInitialData : null}
                           saving={fileUploading}
                           onSave={handleSaveDrawing}
                           onCancel={() => setDrawingOpen(false)}
@@ -1078,6 +1138,12 @@ function formatFileSize(sizeBytes) {
 }
 
 function getFriendlyGeojsonApiError(error) {
+  // Erros locais de validação também precisam aparecer claramente no formulário.
+  if (!error?.response && typeof error?.message === "string" &&
+      error.message.length < 240 && !/[<>]/.test(error.message) &&
+      error.message !== "Network Error") {
+    return error.message;
+  }
   const status = error?.response?.status;
   if (status === 401) return "Sua sessão expirou. Entre novamente no painel administrativo.";
   if (status === 403) return "Você não tem permissão para acessar os arquivos GeoJSON.";
