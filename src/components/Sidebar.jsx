@@ -328,7 +328,7 @@ export default function Sidebar({
         className="
           fixed
           inset-0
-          top-[72px]
+          top-[85px]
           bg-black/40
           z-[999]
         "
@@ -336,7 +336,7 @@ export default function Sidebar({
     )}
 
     <div
-      className={`fixed top-[72px] left-0 bottom-0 z-[1000] flex transition-all duration-300 ${
+      className={`fixed top-[85px] left-0 bottom-0 z-[1000] flex transition-all duration-300 ${
         isOpen
           ? "translate-x-0"
           : "-translate-x-full md:-translate-x-[430px]"

@@ -6,7 +6,6 @@ import {
   Mail,
   BookOpen,
   Settings,
-  Map as MapIcon,
   LogOut,
   ChevronDown,
   UserCircle,
@@ -56,143 +55,74 @@ export default function Header({ onStartTutorial }) {
     <>
       <header
         className="
-          fixed
-          top-0
-          left-0
-          right-0
-          h-[72px]
-          z-[1200]
-          bg-gradient-to-r
-          from-blue-700
-          via-blue-800
-          to-blue-900
-          border-b
-          border-blue-600
-          shadow-lg
-          flex
-          items-center
-          px-3 md:px-6 /* Reduzido padding no mobile */
+          fixed top-0 left-0 right-0 h-[85px] z-[1200]
+          flex items-center justify-between
+          bg-gradient-to-r from-blue-700 via-blue-800 to-blue-900
+          border-b border-blue-600 shadow-lg
+          px-3 md:px-6 gap-2
         "
       >
+        {/* IDENTIDADE VISUAL - funciona no desktop e no celular */}
+        <div className="flex items-center gap-3 lg:gap-4 min-w-0">
+          {/* Marca da prefeitura: visível quando há espaço suficiente */}
+          <img
+            src="/images/Logo_Sobral.png"
+            alt="Prefeitura de Sobral"
+            className="hidden lg:block h-12 w-auto object-contain flex-shrink-0"
+          />
 
-        
-        {/* LOGO + IDENTIDADE DO SISTEMA */}
-        <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="hidden lg:block h-9 w-px bg-white/20 flex-shrink-0" />
 
-          {/* Logo */}
-          <div className="flex items-center justify-center">
+          <Link
+            to="/"
+            className="flex items-center gap-2.5 md:gap-3 min-w-0 group"
+            aria-label="Sobral em Mapas — página inicial"
+          >
+            {/* Novo símbolo criado no Figma; sem o antigo fundo amarelo */}
             <img
-              src="/images/Logo_Sobral.png"
-              alt="Prefeitura de Sobral"
+              src="/images/icone_sobral_em_mapas.png"
+              alt=""
+              aria-hidden="true"
               className="
-                h-7
-                sm:h-9
-                md:h-12
+                h-[70px]
                 w-auto
+                max-w-none
+                flex-shrink-0
                 object-contain
+                transition-transform
+                duration-200
+                group-hover:scale-105
               "
             />
-          </div>
 
-          {/* ===== DESKTOP ===== */}
-          <div className="hidden md:flex items-center gap-4">
-
-            <div className="h-10 w-px bg-white/20" />
-
-            <div
-              className="
-                h-12
-                w-12
-                rounded-2xl
-                bg-gradient-to-br
-                from-amber-400
-                to-amber-500
-                shadow-lg
-                flex
-                items-center
-                justify-center
-                ring-2
-                ring-white/10
-              "
-            >
-              <MapIcon
-                size={24}
-                className="text-blue-900"
-              />
-            </div>
-
-            <div className="flex flex-col leading-tight">
+            {/* Nome e subtítulo */}
+            <div className="min-w-0 flex flex-col justify-center">
               <div className="flex items-center gap-2">
-
-                <h1 className="text-2xl font-black tracking-tight text-white">
-                  Sobral em Mapas
+                <h1 className="hidden md:block text-xl lg:text-[30px] font-extrabold tracking-tight leading-tight whitespace-nowrap">
+                  <span className="text-white">Sobral</span>{" "}
+                  <span className="text-blue-100 font-semibold">em</span>{" "}
+                  <span className="text-amber-300">Mapas</span>
                 </h1>
 
-                <span
-                  className="
-                    hidden
-                    xl:inline-flex
-                    px-2
-                    py-0.5
-                    rounded-full
-                    bg-emerald-500/20
-                    border
-                    border-emerald-300/20
-                    text-emerald-200
-                    text-[10px]
-                    font-bold
-                    uppercase
-                    tracking-widest
-                  "
-                >
+                {/* Título compacto para telas pequenas */}
+                <div className="md:hidden flex flex-col text-white font-extrabold text-[15px] sm:text-[17px] leading-[1.08] tracking-tight">
+                  <span>Sobral</span>
+                  <span><span className="font-semibold">em</span> <span className="text-amber-300">Mapas</span></span>
+                </div>
+
+                <span className="hidden xl:inline-flex rounded-full px-2 py-0.5
+                                 bg-amber-400/15 text-amber-200 border border-amber-300/30
+                                 text-[10px] font-bold tracking-widest leading-none">
                   SIG
                 </span>
-
               </div>
 
-              <span className="text-xs text-blue-200 tracking-wide">
-                Sistema de Informações Geográficas • Prefeitura de Sobral
-              </span>
+              <p className="hidden md:block mt-0.5 text-[13px] lg:text-xs text-blue-100/90 tracking-wide whitespace-nowrap">
+                Sistema de Informações Geográficas
+                <span className="hidden 2xl:inline"> • Prefeitura de Sobral</span>
+              </p>
             </div>
-
-          </div>
-
-          {/* ===== MOBILE ===== */}
-          <div className="flex md:hidden items-center gap-2">
-
-            <div
-              className="
-                h-8
-                w-8
-                rounded-xl
-                bg-gradient-to-br
-                from-amber-400
-                to-amber-500
-                flex
-                items-center
-                justify-center
-                shadow
-              "
-            >
-              <MapIcon
-                size={16}
-                className="text-blue-900"
-              />
-            </div>
-
-            <div className="flex flex-col leading-none">
-              <span className="text-[15px] font-extrabold text-white">
-                Sobral
-              </span>
-
-              <span className="text-[15px] font-extrabold text-white">
-                em Mapas
-              </span>
-
-            </div>
-
-          </div>
-
+          </Link>
         </div>
 
         {/* ÁREA DIREITA (Botões e Perfil) */}
