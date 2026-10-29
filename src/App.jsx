@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Routes,
@@ -18,16 +19,13 @@ import Wms from "./pages/admin/Wms";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 
+// Perfis com acesso ao painel administrativo.
+const administrativeRoles = [
+  "Superadministrador",
+  "Administrador",
+];
+
 function App() {
-  const adminAndAgentRoles = [
-    "Administrador",
-    "Agente",
-  ];
-
-  const onlyAdminRoles = [
-    "Administrador",
-  ];
-
   return (
     <BrowserRouter>
       <Routes>
@@ -44,8 +42,9 @@ function App() {
         />
 
         {/* Página do perfil */}
-        <Route path="/minha-conta" element={
-          <Profile />} 
+        <Route
+          path="/minha-conta"
+          element={<Profile />}
         />
 
         {/* Redirecionamento inicial do painel */}
@@ -59,57 +58,73 @@ function App() {
           }
         />
 
-        {/* Administrador e Agente */}
+        {/* Dashboard administrativo */}
         <Route
           path="/admin/dashboard"
           element={
-            <ProtectedRoute roles={adminAndAgentRoles}>
+            <ProtectedRoute roles={administrativeRoles}>
               <Dashboard />
             </ProtectedRoute>
           }
         />
 
+        {/* Gerenciamento de camadas */}
         <Route
           path="/admin/layers"
           element={
-            <ProtectedRoute roles={adminAndAgentRoles}>
+            <ProtectedRoute roles={administrativeRoles}>
               <Layers />
             </ProtectedRoute>
           }
         />
 
+        {/* Gerenciamento de categorias */}
         <Route
           path="/admin/categories"
           element={
-            <ProtectedRoute roles={adminAndAgentRoles}>
+            <ProtectedRoute roles={administrativeRoles}>
               <Categories />
             </ProtectedRoute>
           }
         />
 
+        {/* Gerenciamento de links WMS */}
         <Route
           path="/admin/wms"
           element={
-            <ProtectedRoute roles={adminAndAgentRoles}>
+            <ProtectedRoute roles={administrativeRoles}>
               <Wms />
             </ProtectedRoute>
           }
         />
 
-        {/* Somente Administrador */}
+        {/*
+          Usuários:
+          - Superadministrador: gerenciamento completo.
+          - Administrador: somente consulta.
+
+          As permissões de escrita são verificadas
+          pelo backend Laravel.
+        */}
         <Route
           path="/admin/users"
           element={
-            <ProtectedRoute roles={onlyAdminRoles}>
+            <ProtectedRoute roles={administrativeRoles}>
               <Users />
             </ProtectedRoute>
           }
         />
 
+        {/*
+          Solicitações:
+          - Superadministrador: aprovar ou recusar.
+          - Administrador: aprovar ou recusar
+            somente cadastros de Visitantes.
+        */}
         <Route
           path="/admin/requests"
           element={
-            <ProtectedRoute roles={onlyAdminRoles}>
+            <ProtectedRoute roles={administrativeRoles}>
               <Requests />
             </ProtectedRoute>
           }

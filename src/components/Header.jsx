@@ -45,7 +45,7 @@ export default function Header({ onStartTutorial }) {
   };
 
   const role = user?.profile?.nome;
-  const isAdmin = ["Administrador", "Agente"].includes(role);
+  const isAdmin = ["Superadministrador", "Administrador"].includes(role);
 
   const getInitial = (name) => {
     return name ? name.charAt(0).toUpperCase() : "U";
@@ -166,6 +166,7 @@ export default function Header({ onStartTutorial }) {
                 to="/admin/dashboard"
                 className="flex items-center gap-2 px-4 py-2 mr-1 rounded-xl text-amber-400 hover:bg-white/10 transition-all font-semibold"
                 title="Painel administrativo"
+                aria-label="Abrir painel administrativo"
               >
                 <Settings size={18} />
               </Link>
@@ -263,7 +264,7 @@ export default function Header({ onStartTutorial }) {
             className={`
               lg:hidden
               fixed
-              top-[72px]
+              top-[85px]
               left-0
               right-0
 

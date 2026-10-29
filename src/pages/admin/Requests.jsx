@@ -10,12 +10,14 @@ import {
   ShieldCheck,
   CalendarDays,
   Inbox,
+  ClipboardCheck,
+  Info,
 } from "lucide-react";
 
 import AdminLayout from "../../components/admin/AdminLayout";
 import ConfirmDialog from "../../components/admin/ConfirmDialog";
 import Toast from "../../components/ui/Toast";
-
+import { useAuth } from "../../context/AuthContext";
 import {
   getPendingUsers,
   approveUser,
@@ -23,54 +25,70 @@ import {
 } from "../../services/userService";
 
 export default function Requests() {
+  const { user: currentUser } = useAuth();
+  const role = currentUser?.profile?.nome;
+  const isSuperadmin = role === "Superadministrador";
+  const isAdministrator = role === "Administrador";
+
   const [requests, setRequests] = useState([]);
-
   const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] =
-    useState(null);
-
+  const [processingId, setProcessingId] = useState(null);
   const [error, setError] = useState("");
-  const [userToReject, setUserToReject] =
-    useState(null);
+  const [userToReject, setUserToReject] = useState(null);
+  const [toast, setToast] = useState({ type: "success", message: "" });
 
-  const [toast, setToast] = useState({
-    type: "success",
-    message: "",
-  });
+  useEffect(() => {
+    let active = true;
 
-  const showToast = (type, message) => {
-    setToast({
-      type,
-      message,
-    });
-  };
+    const loadInitialRequests = async () => {
+      try {
+        const response = await getPendingUsers();
+        if (!active) return;
+        setRequests(response.requests || []);
+      } catch (requestError) {
+        if (!active) return;
+        console.error("Erro ao carregar solicitações:", requestError);
+        const message = getErrorMessage(
+          requestError,
+          "Não foi possível carregar as solicitações."
+        );
+        setError(message);
+        setToast({ type: "error", message });
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
 
-  const closeToast = () => {
-    setToast({
-      type: "success",
-      message: "",
-    });
-  };
+    loadInitialRequests();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const visibleRequests = isSuperadmin
+    ? requests
+    : requests.filter((request) => request.profile?.nome === "Visitante");
+
+  const totalPending = visibleRequests.length;
+  const totalVisitors = visibleRequests.filter(
+    (request) => request.profile?.nome === "Visitante"
+  ).length;
+
+  const showToast = (type, message) => setToast({ type, message });
+  const closeToast = () => setToast({ type: "success", message: "" });
 
   const loadRequests = async () => {
     try {
       setLoading(true);
       setError("");
-
       const response = await getPendingUsers();
-
       setRequests(response.requests || []);
     } catch (requestError) {
-      console.error(
-        "Erro ao carregar solicitações:",
-        requestError
-      );
-
+      console.error("Erro ao atualizar solicitações:", requestError);
       const message = getErrorMessage(
         requestError,
-        "Não foi possível carregar as solicitações."
+        "Não foi possível atualizar as solicitações."
       );
-
       setError(message);
       showToast("error", message);
     } finally {
@@ -78,383 +96,232 @@ export default function Requests() {
     }
   };
 
-  const handleApprove = async (user) => {
+  const canReview = (request) =>
+    isSuperadmin ||
+    (isAdministrator && request.profile?.nome === "Visitante");
+
+  const handleApprove = async (request) => {
+    if (processingId !== null || !canReview(request)) return;
+
     try {
-      setProcessingId(user.id);
-
-      const response = await approveUser(
-        user.id
-      );
-
+      setProcessingId(request.id);
+      const response = await approveUser(request.id);
       setRequests((previous) =>
-        previous.filter(
-          (item) => item.id !== user.id
-        )
+        previous.filter((item) => item.id !== request.id)
       );
-
-      window.dispatchEvent(
-        new Event("pendingUsersChanged")
-      );
-
+      window.dispatchEvent(new Event("pendingUsersChanged"));
       showToast(
         "success",
-        response.message ||
-          `A solicitação de "${user.name}" foi aprovada.`
+        response.message || `A solicitação de "${request.name}" foi aprovada.`
       );
     } catch (requestError) {
-      console.error(
-        "Erro ao aprovar solicitação:",
-        requestError
-      );
-
+      console.error("Erro ao aprovar solicitação:", requestError);
       showToast(
         "error",
-        getErrorMessage(
-          requestError,
-          "Não foi possível aprovar a solicitação."
-        )
+        getErrorMessage(requestError, "Não foi possível aprovar a solicitação.")
       );
     } finally {
       setProcessingId(null);
     }
   };
 
-  const askReject = (user) => {
-    setUserToReject(user);
+  const askReject = (request) => {
+    if (!canReview(request) || processingId !== null) return;
+    setUserToReject(request);
   };
 
   const confirmReject = async () => {
-    if (!userToReject) return;
+    if (!userToReject || processingId !== null || !canReview(userToReject)) {
+      return;
+    }
 
     try {
       setProcessingId(userToReject.id);
-
-      const response = await rejectUser(
-        userToReject.id
-      );
-
+      const response = await rejectUser(userToReject.id);
       setRequests((previous) =>
-        previous.filter(
-          (item) =>
-            item.id !== userToReject.id
-        )
+        previous.filter((item) => item.id !== userToReject.id)
       );
-
-      window.dispatchEvent(
-        new Event("pendingUsersChanged")
-      );
-
+      window.dispatchEvent(new Event("pendingUsersChanged"));
       showToast(
         "success",
         response.message ||
           `A solicitação de "${userToReject.name}" foi recusada.`
       );
-
       setUserToReject(null);
     } catch (requestError) {
-      console.error(
-        "Erro ao recusar solicitação:",
-        requestError
-      );
-
+      console.error("Erro ao recusar solicitação:", requestError);
       showToast(
         "error",
-        getErrorMessage(
-          requestError,
-          "Não foi possível recusar a solicitação."
-        )
+        getErrorMessage(requestError, "Não foi possível recusar a solicitação.")
       );
     } finally {
       setProcessingId(null);
     }
   };
 
-  useEffect(() => {
-    let isActive = true;
-
-    const loadInitialRequests = async () => {
-      try {
-        const response = await getPendingUsers();
-
-        if (!isActive) return;
-
-        setRequests(response.requests || []);
-      } catch (requestError) {
-        if (!isActive) return;
-
-        console.error(
-          "Erro ao carregar solicitações:",
-          requestError
-        );
-
-        const message = getErrorMessage(
-          requestError,
-          "Não foi possível carregar as solicitações."
-        );
-
-        setError(message);
-
-        setToast({
-          type: "error",
-          message,
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadInitialRequests();
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  const totalPending = requests.length;
-
-  const totalVisitors = requests.filter(
-    (user) =>
-      user.profile?.nome === "Visitante"
-  ).length;
-
   return (
     <AdminLayout>
-      <div className="space-y-8">
-        <section className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-slate-800">
-              Solicitações
-            </h1>
+      <div className="space-y-7">
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-950 via-blue-800 to-blue-700 p-6 text-white shadow-lg sm:p-8">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full border border-white/15 bg-white/5" />
+          <div className="pointer-events-none absolute -bottom-24 right-28 h-44 w-44 rounded-full border border-amber-300/20 bg-amber-300/5" />
 
-            <p className="text-slate-500 mt-1">
-              Analise e aprove novos cadastros do
-              Sobral em Mapas.
-            </p>
+          <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-blue-50">
+                <ClipboardCheck size={15} />
+                Administração de contas
+              </div>
+              <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
+                Solicitações de cadastro
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-blue-100 sm:text-base">
+                {isSuperadmin
+                  ? "Analise os novos cadastros e gerencie as solicitações de acesso ao Sobral em Mapas."
+                  : "Analise e aprove ou recuse solicitações de cadastro de Visitantes."}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadRequests}
+              disabled={loading || processingId !== null}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-amber-400 px-5 py-3 font-bold text-blue-950 shadow-sm transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCcw size={18} className={loading ? "animate-spin" : ""} />
+              Atualizar solicitações
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={loadRequests}
-            disabled={loading}
-            className="
-              px-5
-              py-3
-              rounded-2xl
-              bg-white
-              border
-              border-slate-200
-              text-slate-700
-              font-bold
-              hover:bg-slate-50
-              disabled:opacity-60
-              transition
-              flex
-              items-center
-              gap-2
-            "
-          >
-            <RefreshCcw
-              size={18}
-              className={
-                loading
-                  ? "animate-spin"
-                  : ""
-              }
-            />
-
-            Atualizar
-          </button>
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <RequestStatCard
             title="Aguardando análise"
             value={totalPending}
-            description="Cadastros ainda não analisados"
+            description="Cadastros pendentes disponíveis para análise"
             icon={<Clock3 size={25} />}
             iconClass="bg-amber-100 text-amber-700"
           />
-
           <RequestStatCard
             title="Visitantes pendentes"
             value={totalVisitors}
-            description="Solicitações do cadastro público"
+            description="Solicitações realizadas pelo cadastro público"
             icon={<UserRoundPlus size={25} />}
             iconClass="bg-blue-100 text-blue-700"
           />
         </section>
 
+        {!isSuperadmin && (
+          <div className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <Info size={19} className="mt-0.5 shrink-0" />
+            <p>
+              Como Administrador, você pode aprovar ou recusar somente cadastros
+              de <strong>Visitantes</strong>. O gerenciamento de perfis e contas
+              existentes é exclusivo do Superadministrador.
+            </p>
+          </div>
+        )}
+
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-5">
+          <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
         )}
 
-        <section className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-black text-slate-800">
-                Cadastros pendentes
-              </h2>
-
-              <p className="text-sm text-slate-500 mt-1">
-                Aprove somente usuários
-                reconhecidos e autorizados.
+              <h2 className="text-xl font-black text-slate-800">Cadastros pendentes</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Confira as informações antes de aprovar ou recusar uma conta.
               </p>
             </div>
-
-            <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-500">
-              <Inbox size={17} />
-
-              {totalPending} solicitação(ões)
+            <span className="inline-flex items-center gap-2 self-start rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-600">
+              <Inbox size={16} />
+              {totalPending} {totalPending === 1 ? "solicitação" : "solicitações"}
             </span>
           </div>
 
           {loading ? (
-            <div className="p-12 flex items-center justify-center">
-              <div className="flex items-center gap-3 text-blue-700 font-semibold">
-                <RefreshCcw
-                  className="animate-spin"
-                  size={22}
-                />
-
-                Carregando solicitações...
-              </div>
+            <div className="flex items-center justify-center gap-3 p-12 font-semibold text-blue-700">
+              <RefreshCcw size={22} className="animate-spin" />
+              Carregando solicitações...
             </div>
-          ) : requests.length === 0 ? (
+          ) : error && requests.length === 0 ? (
+            <div className="p-10 text-center text-slate-500">
+              Não foi possível exibir as solicitações. Tente atualizar novamente.
+            </div>
+          ) : visibleRequests.length === 0 ? (
             <EmptyRequests />
           ) : (
             <div className="divide-y divide-slate-100">
-              {requests.map((user) => {
-                const isProcessing =
-                  processingId === user.id;
+              {visibleRequests.map((request) => {
+                const isProcessing = processingId === request.id;
+                const canAct = canReview(request);
 
                 return (
-                  <article
-                    key={user.id}
-                    className="
-                      p-6
-                      hover:bg-slate-50
-                      transition
-                    "
-                  >
-                    <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
-                      <div className="flex items-start gap-4 min-w-0">
-                        <div className="h-14 w-14 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xl shrink-0">
-                          {getInitial(user.name)}
+                  <article key={request.id} className="p-5 transition hover:bg-slate-50/70 sm:p-6">
+                    <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex min-w-0 items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-xl font-black text-blue-700 sm:h-14 sm:w-14">
+                          {getInitial(request.name)}
                         </div>
 
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-black text-slate-800">
-                              {user.name}
+                            <h3 className="break-words text-lg font-black text-slate-800">
+                              {request.name}
                             </h3>
-
-                            <ProfileBadge
-                              profile={
-                                user.profile?.nome
-                              }
-                            />
+                            <ProfileBadge profile={request.profile?.nome} />
                           </div>
 
                           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
-                            <span className="flex items-center gap-2">
-                              <Mail size={16} />
-                              {user.email}
+                            <span className="inline-flex min-w-0 items-center gap-2 break-all">
+                              <Mail size={16} className="shrink-0" />
+                              {request.email}
                             </span>
-
-                            <span className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-2">
                               <AtSign size={16} />
-                              {user.login}
+                              {request.login}
                             </span>
-
-                            <span className="flex items-center gap-2">
-                              <CalendarDays
-                                size={16}
-                              />
-
-                              Solicitado em{" "}
-                              {formatDate(
-                                user.created_at
-                              )}
+                            <span className="inline-flex items-center gap-2">
+                              <CalendarDays size={16} />
+                              Solicitado em {formatDate(request.created_at)}
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleApprove(user)
-                          }
-                          disabled={
-                            isProcessing ||
-                            Boolean(processingId)
-                          }
-                          className="
-                            px-5
-                            py-3
-                            rounded-2xl
-                            bg-green-600
-                            text-white
-                            font-bold
-                            hover:bg-green-700
-                            disabled:opacity-50
-                            disabled:cursor-not-allowed
-                            transition
-                            flex
-                            items-center
-                            justify-center
-                            gap-2
-                          "
-                        >
-                          {isProcessing ? (
-                            <RefreshCcw
-                              size={18}
-                              className="animate-spin"
-                            />
-                          ) : (
-                            <CheckCircle2
-                              size={18}
-                            />
-                          )}
-
-                          Aprovar
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            askReject(user)
-                          }
-                          disabled={
-                            isProcessing ||
-                            Boolean(processingId)
-                          }
-                          className="
-                            px-5
-                            py-3
-                            rounded-2xl
-                            bg-red-50
-                            border
-                            border-red-200
-                            text-red-700
-                            font-bold
-                            hover:bg-red-100
-                            disabled:opacity-50
-                            disabled:cursor-not-allowed
-                            transition
-                            flex
-                            items-center
-                            justify-center
-                            gap-2
-                          "
-                        >
-                          <XCircle size={18} />
-                          Recusar
-                        </button>
-                      </div>
+                      {canAct ? (
+                        <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={() => handleApprove(request)}
+                            disabled={processingId !== null}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 py-3 font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isProcessing ? (
+                              <RefreshCcw size={18} className="animate-spin" />
+                            ) : (
+                              <CheckCircle2 size={18} />
+                            )}
+                            Aprovar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => askReject(request)}
+                            disabled={processingId !== null}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-5 py-3 font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <XCircle size={18} />
+                            Recusar
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-sm font-medium text-slate-400">
+                          Sem permissão para analisar este cadastro
+                        </span>
+                      )}
                     </div>
                   </article>
                 );
@@ -469,65 +336,33 @@ export default function Requests() {
         title="Recusar solicitação"
         message={
           userToReject
-            ? `Tem certeza que deseja recusar o cadastro de "${userToReject.name}"? O cadastro será removido do sistema e essa ação não poderá ser desfeita.`
+            ? `Tem certeza que deseja recusar o cadastro de "${userToReject.name}"? O cadastro será removido do sistema e esta ação não poderá ser desfeita.`
             : ""
         }
         confirmText="Recusar cadastro"
         cancelText="Cancelar"
-        loading={Boolean(processingId)}
+        loading={processingId !== null}
         onCancel={() => {
-          if (!processingId) {
-            setUserToReject(null);
-          }
+          if (processingId === null) setUserToReject(null);
         }}
         onConfirm={confirmReject}
       />
 
-      <Toast
-        type={toast.type}
-        message={toast.message}
-        onClose={closeToast}
-      />
+      <Toast type={toast.type} message={toast.message} onClose={closeToast} />
     </AdminLayout>
   );
 }
 
-function RequestStatCard({
-  title,
-  value,
-  description,
-  icon,
-  iconClass,
-}) {
+function RequestStatCard({ title, value, description, icon, iconClass }) {
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex items-center gap-5">
-      <div
-        className={`
-          h-14
-          w-14
-          rounded-2xl
-          flex
-          items-center
-          justify-center
-          shrink-0
-          ${iconClass}
-        `}
-      >
+    <div className="flex items-center gap-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${iconClass}`}>
         {icon}
       </div>
-
       <div>
-        <p className="text-sm font-semibold text-slate-500">
-          {title}
-        </p>
-
-        <h3 className="text-4xl font-black text-slate-900 mt-1">
-          {value}
-        </h3>
-
-        <p className="text-xs text-slate-400 mt-1">
-          {description}
-        </p>
+        <p className="text-sm font-semibold text-slate-500">{title}</p>
+        <h3 className="mt-1 text-4xl font-black text-slate-900">{value}</h3>
+        <p className="mt-1 text-xs text-slate-400">{description}</p>
       </div>
     </div>
   );
@@ -536,18 +371,15 @@ function RequestStatCard({
 function EmptyRequests() {
   return (
     <div className="p-12 text-center">
-      <div className="h-20 w-20 rounded-3xl bg-green-100 text-green-700 flex items-center justify-center mx-auto">
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-green-100 text-green-700">
         <ShieldCheck size={38} />
       </div>
-
-      <h3 className="text-xl font-black text-slate-800 mt-5">
+      <h3 className="mt-5 text-xl font-black text-slate-800">
         Nenhuma solicitação pendente
       </h3>
-
-      <p className="text-slate-500 mt-2 max-w-md mx-auto">
-        Todos os cadastros foram analisados.
-        Novas solicitações aparecerão aqui
-        automaticamente.
+      <p className="mx-auto mt-2 max-w-md text-slate-500">
+        Não há cadastros aguardando análise no momento. Use o botão
+        "Atualizar solicitações" para consultar novamente.
       </p>
     </div>
   );
@@ -555,66 +387,37 @@ function EmptyRequests() {
 
 function ProfileBadge({ profile }) {
   const styles = {
-    Administrador:
-      "bg-blue-100 text-blue-700",
-    Agente:
-      "bg-amber-100 text-amber-700",
-    Visitante:
-      "bg-slate-100 text-slate-600",
+    Superadministrador: "bg-indigo-100 text-indigo-700",
+    Administrador: "bg-blue-100 text-blue-700",
+    Visitante: "bg-slate-100 text-slate-600",
   };
 
   return (
-    <span
-      className={`
-        inline-flex
-        px-3
-        py-1
-        rounded-full
-        text-xs
-        font-black
-        ${
-          styles[profile] ||
-          "bg-slate-100 text-slate-600"
-        }
-      `}
-    >
+    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${styles[profile] || "bg-slate-100 text-slate-600"}`}>
       {profile || "Sem perfil"}
     </span>
   );
 }
 
 function getInitial(name) {
-  return name
-    ? name.charAt(0).toUpperCase()
-    : "U";
+  return name ? name.charAt(0).toUpperCase() : "U";
 }
 
-function formatDate(date) {
-  if (!date) {
-    return "data não informada";
-  }
-
+function formatDate(value) {
+  if (!value) return "data não informada";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "data não informada";
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
-  }).format(new Date(date));
+  }).format(date);
 }
 
-function getErrorMessage(
-  requestError,
-  fallback
-) {
+function getErrorMessage(requestError, fallback) {
   const data = requestError.response?.data;
-
   if (data?.errors) {
-    const messages = Object.values(data.errors)
-      .flat()
-      .filter(Boolean);
-
-    if (messages.length > 0) {
-      return messages.join(" ");
-    }
+    const messages = Object.values(data.errors).flat().filter(Boolean);
+    if (messages.length > 0) return messages.join(" ");
   }
-
   return data?.message || fallback;
 }

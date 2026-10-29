@@ -1,11 +1,14 @@
 import { useState } from "react";
 import {
-  X,
-  UserPlus,
-  Save,
   Eye,
   EyeOff,
+  Save,
+  ShieldCheck,
+  UserPlus,
+  X,
 } from "lucide-react";
+
+const ALLOWED_ROLES = ["Administrador", "Visitante"];
 
 function getInitialForm(user, profiles) {
   if (user) {
@@ -14,21 +17,21 @@ function getInitialForm(user, profiles) {
       email: user.email || "",
       login: user.login || "",
       password: "",
-      profile_id: user.profile_id || user.profile?.id || "",
+      profile_id: String(user.profile_id || user.profile?.id || ""),
       approved: Boolean(user.approved),
     };
   }
 
-  const visitanteProfile = profiles.find(
-    (profile) => profile.nome === "Visitante"
-  );
+  const defaultProfile =
+    profiles.find((profile) => profile.nome === "Visitante") ||
+    profiles.find((profile) => profile.nome === "Administrador");
 
   return {
     name: "",
     email: "",
     login: "",
     password: "",
-    profile_id: visitanteProfile?.id || profiles[0]?.id || "",
+    profile_id: defaultProfile ? String(defaultProfile.id) : "",
     approved: true,
   };
 }
@@ -41,32 +44,39 @@ export default function UserFormModal({
   loading = false,
 }) {
   const isEditing = Boolean(user);
-
-  const [form, setForm] = useState(() =>
-    getInitialForm(user, profiles)
+  const allowedProfiles = profiles.filter((profile) =>
+    ALLOWED_ROLES.includes(profile.nome)
   );
 
+  const [form, setForm] = useState(() =>
+    getInitialForm(user, allowedProfiles)
+  );
   const [showPassword, setShowPassword] = useState(false);
 
+  const isProtectedAccount = user?.profile?.nome === "Superadministrador";
+  const validProfile = allowedProfiles.some(
+    (profile) => String(profile.id) === String(form.profile_id)
+  );
+
   const handleChange = (field, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setForm((previous) => ({ ...previous, [field]: value }));
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
 
+    if (loading || isProtectedAccount || !validProfile) return;
+
     const payload = {
-      name: form.name,
-      email: form.email,
-      login: form.login,
-      profile_id: form.profile_id,
+      name: form.name.trim(),
+      email: form.email.trim(),
+      login: form.login.trim(),
+      profile_id: Number(form.profile_id),
       approved: form.approved,
     };
 
-    if (!isEditing || form.password.trim()) {
+    // Na edição, senha vazia significa manter a senha atual.
+    if (!isEditing || form.password.trim() !== "") {
       payload.password = form.password;
     }
 
@@ -74,23 +84,27 @@ export default function UserFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-5"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="user-form-title"
+    >
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50/70 p-5 sm:p-6">
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
               <UserPlus size={24} />
             </div>
 
             <div>
-              <h2 className="text-xl font-black text-slate-800">
+              <h2 id="user-form-title" className="text-xl font-black text-slate-900">
                 {isEditing ? "Editar usuário" : "Novo usuário"}
               </h2>
-
-              <p className="text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-500">
                 {isEditing
-                  ? "Atualize os dados do usuário selecionado."
-                  : "Cadastre um novo usuário no sistema."}
+                  ? "Atualize os dados e as permissões desta conta."
+                  : "Cadastre uma conta de Administrador ou Visitante."}
               </p>
             </div>
           </div>
@@ -99,180 +113,195 @@ export default function UserFormModal({
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="h-10 w-10 rounded-xl bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 transition disabled:opacity-50 flex items-center justify-center"
+            aria-label="Fechar formulário"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
           >
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">
-                Nome
-              </label>
-
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) =>
-                  handleChange("name", e.target.value)
-                }
-                disabled={loading}
-                required
-                className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition disabled:bg-slate-100"
-                placeholder="Nome completo"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">
-                Login
-              </label>
-
-              <input
-                type="text"
-                value={form.login}
-                onChange={(e) =>
-                  handleChange("login", e.target.value)
-                }
-                disabled={loading}
-                required
-                className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition disabled:bg-slate-100"
-                placeholder="login.usuario"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">
-              E-mail
-            </label>
-
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) =>
-                handleChange("email", e.target.value)
-              }
-              disabled={loading}
-              required
-              className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition disabled:bg-slate-100"
-              placeholder="usuario@sobral.ce.gov.br"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">
-              Senha{" "}
-              {isEditing && (
-                <span className="font-normal text-slate-400">
-                  (opcional)
-                </span>
-              )}
-            </label>
-
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                onChange={(e) =>
-                  handleChange("password", e.target.value)
-                }
-                disabled={loading}
-                required={!isEditing}
-                minLength={6}
-                className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-2xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition disabled:bg-slate-100"
-                placeholder={
-                  isEditing
-                    ? "Deixe vazio para manter a senha atual"
-                    : "Mínimo 6 caracteres"
-                }
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowPassword((prev) => !prev)
-                }
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600"
-              >
-                {showPassword ? (
-                  <EyeOff size={18} />
-                ) : (
-                  <Eye size={18} />
-                )}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">
-                Perfil
-              </label>
-
-              <select
-                value={form.profile_id}
-                onChange={(e) =>
-                  handleChange("profile_id", e.target.value)
-                }
-                disabled={loading}
-                required
-                className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition disabled:bg-slate-100"
-              >
-                <option value="">Selecione um perfil</option>
-
-                {profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">
-                Status
-              </label>
-
-              <select
-                value={form.approved ? "1" : "0"}
-                onChange={(e) =>
-                  handleChange(
-                    "approved",
-                    e.target.value === "1"
-                  )
-                }
-                disabled={loading}
-                className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition disabled:bg-slate-100"
-              >
-                <option value="1">Aprovado</option>
-                <option value="0">Pendente</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
+        {isProtectedAccount ? (
+          <div className="space-y-4 p-6">
+            <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              Esta conta de Superadministrador é protegida e não pode ser editada neste formulário.
+            </p>
             <button
               type="button"
               onClick={onClose}
-              disabled={loading}
-              className="px-5 py-3 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition disabled:opacity-50"
+              className="rounded-xl bg-blue-700 px-5 py-3 font-bold text-white hover:bg-blue-800"
             >
-              Cancelar
-            </button>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 transition disabled:opacity-60 flex items-center gap-2"
-            >
-              <Save size={18} />
-              {loading ? "Salvando..." : "Salvar usuário"}
+              Fechar
             </button>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-5 overflow-y-auto p-5 sm:p-6">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <div>
+                <label htmlFor="user-name" className="mb-2 block text-sm font-bold text-slate-700">
+                  Nome completo
+                </label>
+                <input
+                  id="user-name"
+                  type="text"
+                  autoComplete="name"
+                  value={form.name}
+                  onChange={(event) => handleChange("name", event.target.value)}
+                  disabled={loading}
+                  required
+                  maxLength={255}
+                  placeholder="Nome do usuário"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="user-login" className="mb-2 block text-sm font-bold text-slate-700">
+                  Login
+                </label>
+                <input
+                  id="user-login"
+                  type="text"
+                  autoComplete="username"
+                  value={form.login}
+                  onChange={(event) => handleChange("login", event.target.value)}
+                  disabled={loading}
+                  required
+                  maxLength={100}
+                  placeholder="login.usuario"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="user-email" className="mb-2 block text-sm font-bold text-slate-700">
+                E-mail
+              </label>
+              <input
+                id="user-email"
+                type="email"
+                autoComplete="email"
+                value={form.email}
+                onChange={(event) => handleChange("email", event.target.value)}
+                disabled={loading}
+                required
+                maxLength={255}
+                placeholder="usuario@exemplo.com"
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="user-password" className="mb-2 block text-sm font-bold text-slate-700">
+                Senha
+                {isEditing && (
+                  <span className="ml-2 font-normal text-slate-400">(opcional)</span>
+                )}
+              </label>
+
+              <div className="relative">
+                <input
+                  id="user-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={form.password}
+                  onChange={(event) => handleChange("password", event.target.value)}
+                  disabled={loading}
+                  required={!isEditing}
+                  minLength={6}
+                  placeholder={
+                    isEditing
+                      ? "Deixe em branco para manter a senha atual"
+                      : "Defina uma senha para a nova conta"
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 pr-12 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((previous) => !previous)}
+                  disabled={loading}
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-blue-700 disabled:opacity-50"
+                >
+                  {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-slate-500">
+                Mínimo de 6 caracteres exigido pela API; prefira uma senha longa e exclusiva.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <div>
+                <label htmlFor="user-profile" className="mb-2 block text-sm font-bold text-slate-700">
+                  Perfil de acesso
+                </label>
+                <select
+                  id="user-profile"
+                  value={form.profile_id}
+                  onChange={(event) => handleChange("profile_id", event.target.value)}
+                  disabled={loading}
+                  required
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
+                >
+                  <option value="">Selecione um perfil</option>
+                  {allowedProfiles.map((profile) => (
+                    <option key={profile.id} value={String(profile.id)}>
+                      {profile.nome}
+                    </option>
+                  ))}
+                </select>
+                {allowedProfiles.length === 0 && (
+                  <p className="mt-2 text-xs text-red-600">
+                    Nenhum perfil disponível. Confira os seeders e atualize a lista de usuários.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="user-approved" className="mb-2 block text-sm font-bold text-slate-700">
+                  Status da conta
+                </label>
+                <select
+                  id="user-approved"
+                  value={form.approved ? "1" : "0"}
+                  onChange={(event) => handleChange("approved", event.target.value === "1")}
+                  disabled={loading}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
+                >
+                  <option value="1">Aprovado</option>
+                  <option value="0">Pendente</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+              <ShieldCheck size={20} className="mt-0.5 shrink-0" />
+              <p>
+                O perfil Superadministrador é exclusivo e não pode ser atribuído a outras contas.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={loading}
+                className="rounded-2xl bg-slate-100 px-5 py-3 font-bold text-slate-600 transition hover:bg-slate-200 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !validProfile}
+                className="flex items-center gap-2 rounded-2xl bg-blue-700 px-5 py-3 font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Save size={18} />
+                {loading ? "Salvando..." : isEditing ? "Salvar alterações" : "Cadastrar usuário"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
