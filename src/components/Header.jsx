@@ -15,10 +15,12 @@ import {
 
 import LoginModal from "./auth/LoginModal";
 import ContactModal from "./ContactModal";
+import Toast from "./ui/Toast";
 import { useAuth } from "../context/AuthContext";
 
 export default function Header({ onStartTutorial }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [loginToast, setLoginToast] = useState("");
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // Estado para o menu de celular
@@ -337,11 +339,22 @@ export default function Header({ onStartTutorial }) {
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
+        onLoginSuccess={(loggedUser) => {
+          const firstName = loggedUser?.name?.trim().split(/\s+/)[0] || "usuário";
+          setLoginToast(`Login realizado com sucesso! Bem-vindo(a), ${firstName}!`);
+        }}
       />
 
       <ContactModal
         isOpen={isContactOpen}
         onClose={() => setIsContactOpen(false)}
+      />
+
+      <Toast
+        type="success"
+        message={loginToast}
+        onClose={() => setLoginToast("")}
+        duration={4000}
       />
     </>
   );

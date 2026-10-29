@@ -123,7 +123,7 @@ export default function Users() {
     String(target?.id) === String(currentUser?.id);
 
   const openCreateModal = () => {
-    if (!isSuperadmin) return;
+    if (!canViewUsers) return;
     setSelectedUser(null);
     setIsModalOpen(true);
   };
@@ -141,8 +141,8 @@ export default function Users() {
   };
 
   const handleSaveUser = async (payload) => {
-    if (!isSuperadmin || (selectedUser && isProtectedAccount(selectedUser))) {
-      showToast("error", "Esta conta é protegida contra alterações neste painel.");
+    if (!canViewUsers || (selectedUser && (!isSuperadmin || isProtectedAccount(selectedUser)))) {
+      showToast("error", "Você não tem permissão para modificar esta conta.");
       return;
     }
 
@@ -150,8 +150,14 @@ export default function Users() {
     const selectedProfile = profiles.find(
       (profile) => String(profile.id) === String(payload.profile_id)
     );
-    if (!selectedProfile || selectedProfile.nome === SUPERADMIN_ROLE) {
-      showToast("error", "Selecione Administrador ou Visitante.");
+    if (
+      !selectedProfile ||
+      selectedProfile.nome === SUPERADMIN_ROLE ||
+      (!isSuperadmin && selectedProfile.nome !== "Visitante")
+    ) {
+      showToast("error", isSuperadmin
+        ? "Selecione Administrador ou Visitante."
+        : "Administradores podem cadastrar somente Visitantes.");
       return;
     }
 
@@ -218,9 +224,12 @@ export default function Users() {
     (item) => item.profile?.nome === "Visitante"
   ).length;
 
-  // O perfil exclusivo nunca é oferecido no modal de cadastro/edição.
-  const selectableProfiles = profiles.filter(
-    (profile) => profile.nome !== SUPERADMIN_ROLE
+  // O Administrador só pode escolher Visitante; o Superadministrador pode
+  // escolher Administrador ou Visitante. Nenhum deles pode criar um Superadmin.
+  const selectableProfiles = profiles.filter((profile) =>
+    isSuperadmin
+      ? ["Administrador", "Visitante"].includes(profile.nome)
+      : profile.nome === "Visitante"
   );
 
   return (
@@ -234,15 +243,15 @@ export default function Users() {
             <div className="max-w-2xl">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold tracking-wide text-blue-100">
                 <ShieldCheck size={15} />
-                {isSuperadmin ? "Administração de contas" : "Consulta de contas"}
+                {isSuperadmin ? "Administração de contas" : "Cadastros de visitantes"}
               </span>
               <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-                {isSuperadmin ? "Gestão de usuários" : "Consulta de usuários"}
+                {isSuperadmin ? "Gestão de usuários" : "Usuários e visitantes"}
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-blue-100 sm:text-base">
                 {isSuperadmin
                   ? "Gerencie administradores e visitantes, acompanhe os cadastros e preserve o acesso exclusivo do Superadministrador."
-                  : "Consulte os usuários cadastrados e acompanhe as solicitações de visitantes. A criação e a edição de contas são exclusivas do Superadministrador."}
+                  : "Consulte os usuários, cadastre novos Visitantes e acompanhe as solicitações. Criar administradores, editar e excluir contas são ações exclusivas do Superadministrador."}
               </p>
             </div>
 
@@ -262,13 +271,13 @@ export default function Users() {
               >
                 <ClipboardList size={18} /> Solicitações
               </Link>
-              {isSuperadmin && (
+              {canViewUsers && (
                 <button
                   type="button"
                   onClick={openCreateModal}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-blue-950 shadow-sm transition hover:bg-amber-300"
                 >
-                  <Plus size={18} /> Novo usuário
+                  <Plus size={18} /> {isSuperadmin ? "Novo usuário" : "Novo visitante"}
                 </button>
               )}
             </div>
@@ -315,7 +324,7 @@ export default function Users() {
               <p className="mt-1 text-sm text-slate-500">
                 {isSuperadmin
                   ? "A conta do Superadministrador é protegida contra edição e exclusão neste painel."
-                  : "Visualização somente para consulta. Para aprovar ou recusar visitantes, utilize Solicitações."}
+                  : "Você pode cadastrar novos Visitantes e analisar solicitações. A edição e exclusão das contas ficam restritas ao Superadministrador."}
               </p>
             </div>
             <span className="text-sm font-semibold text-slate-500">
@@ -419,7 +428,7 @@ export default function Users() {
         </section>
       </div>
 
-      {isSuperadmin && isModalOpen && (
+      {canViewUsers && isModalOpen && (
         <UserFormModal
           onClose={closeModal}
           onSubmit={handleSaveUser}
