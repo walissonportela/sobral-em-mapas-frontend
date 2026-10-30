@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Search,
@@ -9,6 +9,7 @@ import {
   X,
   Layers,
   Loader2,
+  RefreshCw,
   Trash2,
   School,
   HeartPulse,
@@ -61,6 +62,9 @@ export default function Sidebar({
   });
   const [layers, setLayers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const requestControllerRef = useRef(null);
+  const retryTimerRef = useRef(null);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState({});
   const [activePanel, setActivePanel] =
@@ -88,49 +92,88 @@ export default function Sidebar({
     }
   }, [forceOpenSignal]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadLayers() {
-      try {
-        const response = await api.get("/map-data");
-
-        if (!isMounted) return;
-
-        const data =
-          response.data?.data?.layers || [];
-
-        setLayers(data);
-
-        const categories = {};
-
-        data.forEach((layer) => {
-          const category =
-            layer.subcategory?.category?.name || "Geral";
-
-          categories[category] = false;
-        });
-
-        setExpanded(categories);
-      } catch (error) {
-          console.error("Erro ao carregar camadas:", error);
-
-          if (isMounted) {
-            setLayers([]);
-          }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
+  // Busca inicial com ate duas novas tentativas quando a API sofre falhas
+  // temporarias (por exemplo, um backend acordando apos inatividade).
+  // O botao de recarga executa uma consulta manual, sem atualizar a pagina.
+  const loadLayers = useCallback((automaticRetry = false) => {
+    requestControllerRef.current?.abort();
+    if (retryTimerRef.current !== null) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
     }
 
-    loadLayers();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    setLoading(true);
+    setLoadError("");
 
-    return () => {
-      isMounted = false;
+    const maxAttempts = automaticRetry ? 3 : 1;
+
+    const request = async (attempt) => {
+      try {
+        const response = await api.get("/map-data", {
+          signal: controller.signal,
+          timeout: 25000,
+        });
+        if (controller.signal.aborted) return;
+
+        // Diferenciar resposta legitimamente vazia de resposta inesperada.
+        const data = response.data?.data?.layers ?? response.data?.layers;
+        if (!Array.isArray(data)) {
+          const error = new Error("A API retornou dados de mapas em formato inesperado.");
+          error.invalidMapData = true;
+          throw error;
+        }
+
+        setLayers(data);
+        setExpanded((previous) => {
+          const categories = {};
+          data.forEach((layer) => {
+            const category = layer.subcategory?.category?.name || "Geral";
+            categories[category] = previous[category] ?? false;
+          });
+          return categories;
+        });
+        setLoadError("");
+        setLoading(false);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+
+        const status = error?.response?.status;
+        const retryable = !error.invalidMapData && (
+          !error.response || status === 408 || status === 429 || status >= 500
+        );
+
+        if (automaticRetry && retryable && attempt < maxAttempts) {
+          // Aguarda um pouco antes de tentar novamente; permite cancelar
+          // a tentativa se a pagina for fechada ou o usuario clicar recarregar.
+          retryTimerRef.current = setTimeout(() => {
+            retryTimerRef.current = null;
+            if (!controller.signal.aborted) void request(attempt + 1);
+          }, attempt * 2000);
+          return;
+        }
+
+        console.error("Erro ao carregar camadas:", error);
+        // Nunca descartar as camadas ja carregadas por causa de um erro.
+        setLoadError(getMapLoadingError(error));
+        setLoading(false);
+      }
     };
+
+    void request(1);
   }, []);
+
+  useEffect(() => {
+    loadLayers(true);
+    return () => {
+      requestControllerRef.current?.abort();
+      if (retryTimerRef.current !== null) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, [loadLayers]);
 
   const grouped = useMemo(() => {
     const result = {};
@@ -477,10 +520,20 @@ export default function Sidebar({
                     <Map size={22} />
                   </div>
 
-                  <div>
-                    <h2 className="font-bold text-xl leading-none">
-                      Mapas
-                    </h2>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-bold text-xl leading-none">Mapas</h2>
+                      <button
+                        type="button"
+                        onClick={() => loadLayers(false)}
+                        disabled={loading}
+                        title={loading ? "Atualizando mapas..." : "Recarregar mapas"}
+                        aria-label={loading ? "Atualizando mapas" : "Recarregar mapas"}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-60"
+                      >
+                        <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                      </button>
+                    </div>
 
                     <p className="text-xs text-blue-200 mt-1">
                       Gerenciamento de mapas temáticos
@@ -501,7 +554,7 @@ export default function Sidebar({
                     border-white/10
                   "
                 >
-                  {layers.length} mapas
+                  {loading && layers.length === 0 ? "..." : `${layers.length} mapas`}
                 </div>
               </div>
 
@@ -545,7 +598,28 @@ export default function Sidebar({
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {loading && (
+              {!loading && loadError && (
+                <div role="alert" className="m-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-900">Falha ao atualizar os mapas</p>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-800">{loadError}</p>
+                  <button
+                    type="button"
+                    onClick={() => loadLayers(false)}
+                    className="mt-3 flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-blue-700 shadow-sm ring-1 ring-amber-200 hover:bg-blue-50"
+                  >
+                    <RefreshCw size={14} /> Tentar novamente
+                  </button>
+                </div>
+              )}
+
+              {!loading && !loadError && layers.length === 0 && (
+                <div className="p-5 text-center">
+                  <p className="text-sm font-semibold text-slate-700">Nenhum mapa disponível</p>
+                  <p className="mt-2 text-xs text-slate-500">Ainda não há camadas disponíveis para visualização.</p>
+                </div>
+              )}
+
+              {loading && layers.length === 0 && (
                 <div className="p-5 space-y-4">
                   {[1, 2, 3, 4, 5].map((item) => (
                     <div
@@ -572,7 +646,7 @@ export default function Sidebar({
                 </div>
               )}
 
-              {!loading &&
+              {(!loading || layers.length > 0) &&
                 Object.entries(grouped).map(
                   ([category, subs]) => (
                     <div
@@ -2275,6 +2349,26 @@ function getHistoryFilename(item) {
     .replace(":", "-");
 
   return `sobral-em-mapas-${datePart}`;
+}
+
+function getMapLoadingError(error) {
+  const status = error?.response?.status;
+  if (error?.invalidMapData) {
+    return "O servidor respondeu, mas a lista de mapas veio em formato inesperado. Tente novamente mais tarde.";
+  }
+  if (status === 401 || status === 403) {
+    return "O acesso à lista de mapas não foi autorizado. Tente novamente ou entre em contato com o suporte.";
+  }
+  if (status === 404) {
+    return "A lista de mapas não foi encontrada no servidor. Verifique a configuração da API.";
+  }
+  if (error?.code === "ECONNABORTED" || status === 408 || /timeout/i.test(error?.message || "")) {
+    return "O servidor demorou para responder. Você pode tentar carregar os mapas novamente.";
+  }
+  if (status >= 500) {
+    return "O servidor está temporariamente indisponível. Tente novamente em instantes.";
+  }
+  return "Não foi possível consultar os mapas. Verifique sua conexão e tente novamente.";
 }
 
 function getFavoriteLayersStorageKey() {
