@@ -122,6 +122,13 @@ export default function Users() {
     target?.profile?.nome === SUPERADMIN_ROLE ||
     String(target?.id) === String(currentUser?.id);
 
+  // O Superadministrador gerencia as demais contas; o Administrador
+  // pode editar e excluir somente Visitantes (nunca sua própria conta).
+  const canManageTarget = (target) =>
+    Boolean(target) &&
+    !isProtectedAccount(target) &&
+    (isSuperadmin || (role === "Administrador" && target.profile?.nome === "Visitante"));
+
   const openCreateModal = () => {
     if (!canViewUsers) return;
     setSelectedUser(null);
@@ -129,7 +136,7 @@ export default function Users() {
   };
 
   const openEditModal = (target) => {
-    if (!isSuperadmin || isProtectedAccount(target)) return;
+    if (!canManageTarget(target)) return;
     setSelectedUser(target);
     setIsModalOpen(true);
   };
@@ -141,7 +148,7 @@ export default function Users() {
   };
 
   const handleSaveUser = async (payload) => {
-    if (!canViewUsers || (selectedUser && (!isSuperadmin || isProtectedAccount(selectedUser)))) {
+    if (!canViewUsers || (selectedUser && !canManageTarget(selectedUser))) {
       showToast("error", "Você não tem permissão para modificar esta conta.");
       return;
     }
@@ -189,12 +196,12 @@ export default function Users() {
   };
 
   const askDeleteUser = (target) => {
-    if (!isSuperadmin || isProtectedAccount(target)) return;
+    if (!canManageTarget(target)) return;
     setUserToDelete(target);
   };
 
   const confirmDeleteUser = async () => {
-    if (!isSuperadmin || !userToDelete || isProtectedAccount(userToDelete)) return;
+    if (!canManageTarget(userToDelete)) return;
 
     setDeletingId(userToDelete.id);
     try {
@@ -251,7 +258,7 @@ export default function Users() {
               <p className="mt-2 text-sm leading-relaxed text-blue-100 sm:text-base">
                 {isSuperadmin
                   ? "Gerencie administradores e visitantes, acompanhe os cadastros e preserve o acesso exclusivo do Superadministrador."
-                  : "Consulte os usuários, cadastre novos Visitantes e acompanhe as solicitações. Criar administradores, editar e excluir contas são ações exclusivas do Superadministrador."}
+                  : "Cadastre, edite e exclua Visitantes e acompanhe as solicitações. As contas administrativas permanecem protegidas."}
               </p>
             </div>
 
@@ -324,7 +331,7 @@ export default function Users() {
               <p className="mt-1 text-sm text-slate-500">
                 {isSuperadmin
                   ? "A conta do Superadministrador é protegida contra edição e exclusão neste painel."
-                  : "Você pode cadastrar novos Visitantes e analisar solicitações. A edição e exclusão das contas ficam restritas ao Superadministrador."}
+                  : "Você pode cadastrar, editar e excluir Visitantes. Contas de Administradores e do Superadministrador são somente para consulta."}
               </p>
             </div>
             <span className="text-sm font-semibold text-slate-500">
@@ -348,7 +355,7 @@ export default function Users() {
                       "Login",
                       "Perfil",
                       "Situação",
-                      ...(isSuperadmin ? ["Ações"] : []),
+                      ...(canViewUsers ? ["Ações"] : []),
                     ].map((label) => (
                       <th
                         key={label}
@@ -363,6 +370,7 @@ export default function Users() {
                 <tbody className="divide-y divide-slate-100">
                   {users.map((target) => {
                     const protectedAccount = isProtectedAccount(target);
+                    const canManage = canManageTarget(target);
                     return (
                       <tr key={target.id} className="transition hover:bg-blue-50/30">
                         <td className="px-6 py-4">
@@ -383,11 +391,11 @@ export default function Users() {
                         <td className="px-6 py-4">
                           <ApprovedBadge approved={isApproved(target.approved)} />
                         </td>
-                        {isSuperadmin && (
+                        {canViewUsers && (
                         <td className="px-6 py-4">
-                          {protectedAccount ? (
-                            <div className="flex items-center justify-end gap-2 text-xs font-bold text-slate-500" title="Conta protegida">
-                              <LockKeyhole size={16} /> Protegida
+                          {!canManage ? (
+                            <div className="flex items-center justify-end gap-2 text-xs font-bold text-slate-500" title={protectedAccount ? "Conta protegida" : "Somente leitura"}>
+                              <LockKeyhole size={16} /> {protectedAccount ? "Protegida" : "Somente leitura"}
                             </div>
                           ) : (
                             <div className="flex items-center justify-end gap-2">
@@ -438,7 +446,7 @@ export default function Users() {
         />
       )}
 
-      {isSuperadmin && (
+      {canViewUsers && (
       <ConfirmDialog
         isOpen={Boolean(userToDelete)}
         title="Excluir usuário"
