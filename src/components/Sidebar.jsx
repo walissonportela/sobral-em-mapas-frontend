@@ -552,6 +552,7 @@ export default function Sidebar({
                     text-blue-100
                     border
                     border-white/10
+                    flex items-center justify-center text-center
                   "
                 >
                   {loading && layers.length === 0 ? "..." : `${layers.length} mapas`}

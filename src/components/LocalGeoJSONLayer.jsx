@@ -399,239 +399,446 @@ function formatUnit(value, divisor, unit) {
 }
 
 // Dicionários de apresentação: os dados originais do GeoJSON continuam intactos.
+
 // Os atributos são traduzidos apenas nos popups, sem interferir nos ícones temáticos.
+
 const POPUP_ATTRIBUTE_LABELS = {
+
   "@id": "Identificador OSM",
+
   "@geometry": "Geometria",
+
   "id_2": "ID",
+
   "osm_id": "Identificador OSM",
+
   "addr:city": "Cidade",
+
   "addr:country": "País",
+
   "addr:district": "Distrito",
+
   "addr:state": "Estado",
+
   "addr:housenumber": "Número",
+
   "addr:postcode": "CEP",
+
   "addr:street": "Logradouro",
+
   "addr:suburb": "Bairro",
+
   "addr:neighbourhood": "Bairro",
+
   "addr:place": "Localidade",
+
   "addr:unit": "Unidade",
+
   "amenity": "Tipo de estabelecimento",
+
   "healthcare": "Serviço de saúde",
+
   "healthcare:speciality": "Especialidade médica",
+
   "leisure": "Tipo de área de lazer",
+
   "tourism": "Tipo de atração turística",
+
   "historic": "Patrimônio histórico",
+
   "operator": "Instituição responsável",
+
   "operator:type": "Tipo de administração",
+
   "brand": "Marca",
+
   "check_date": "Data de verificação",
+
   "check:date": "Data de verificação",
+
   "survey:date": "Data do levantamento",
+
   "start_date": "Data de início",
+
   "end_date": "Data de encerramento",
+
   "level": "Nível",
+
   "building:levels": "Número de pavimentos",
+
   "building": "Tipo de edificação",
+
   "opening_hours": "Horário de funcionamento",
+
   "phone": "Telefone",
+
   "contact:phone": "Telefone",
+
   "email": "E-mail",
+
   "contact:email": "E-mail",
+
   "website": "Site",
+
   "contact:website": "Site",
+
   "wheelchair": "Acessibilidade para cadeirantes",
+
   "toilets:wheelchair": "Banheiro acessível",
+
   "tactile_paving": "Piso tátil",
+
   "description": "Descrição",
+
   "desc": "Descrição",
+
   "descricao": "Descrição",
+
   "descrição": "Descrição",
+
   "source": "Fonte dos dados",
+
   "source:geometry": "Fonte da geometria",
+
   "source:date": "Data da fonte",
+
   "name:pt": "Nome em português",
+
   "alt_name": "Nome alternativo",
+
   "official_name": "Nome oficial",
+
   "short_name": "Nome abreviado",
+
   "ref": "Referência",
+
   "highway": "Tipo de via",
+
   "public_transport": "Transporte público",
+
   "railway": "Tipo de infraestrutura ferroviária",
+
   "route": "Tipo de rota",
+
   "surface": "Tipo de pavimentação",
+
   "oneway": "Sentido único",
+
   "lanes": "Número de faixas",
+
   "maxspeed": "Velocidade máxima",
+
   "bridge": "Ponte",
+
   "tunnel": "Túnel",
+
   "lit": "Iluminação",
+
   "access": "Acesso",
+
   "foot": "Acesso a pedestres",
+
   "bicycle": "Acesso de bicicletas",
+
   "motor_vehicle": "Acesso de veículos motorizados",
+
   "shop": "Tipo de comércio",
+
   "landuse": "Uso do solo",
+
   "natural": "Elemento natural",
+
   "waterway": "Tipo de curso d'água",
+
   "sport": "Modalidade esportiva",
+
   "religion": "Religião",
+
   "denomination": "Denominação religiosa",
+
   "population": "População",
+
   "capacity": "Capacidade",
+
   "wikidata": "Wikidata",
+
   "wikipedia": "Wikipédia",
+
   "lei": "Legislação",
+
   "categoria": "Categoria",
+
   "tipo": "Tipo",
+
 };
 
 const POPUP_VALUE_TRANSLATIONS = {
+
   amenity: {
+
     school: "Escola", kindergarten: "Educação infantil", university: "Universidade",
+
     college: "Faculdade", hospital: "Hospital", clinic: "Clínica",
+
     doctors: "Consultório médico", dentist: "Consultório odontológico",
+
     pharmacy: "Farmácia", health_centre: "Centro de saúde",
+
     library: "Biblioteca", place_of_worship: "Local de culto",
+
     police: "Delegacia de polícia", fire_station: "Corpo de bombeiros",
+
     townhall: "Prefeitura", courthouse: "Fórum", public_building: "Prédio público",
+
     bus_station: "Terminal rodoviário", parking: "Estacionamento",
+
     bicycle_parking: "Estacionamento de bicicletas", bicycle_rental: "Aluguel de bicicletas",
+
     drinking_water: "Água potável", recycling: "Ponto de reciclagem",
+
     first_aid: "Primeiros socorros", bank: "Banco", atm: "Caixa eletrônico",
+
     restaurant: "Restaurante", cafe: "Cafeteria", fast_food: "Lanchonete",
+
     marketplace: "Mercado", community_centre: "Centro comunitário",
+
     social_facility: "Equipamento de assistência social",
+
   },
+
   healthcare: {
+
     hospital: "Hospital", clinic: "Clínica", doctor: "Consultório médico",
+
     dentist: "Consultório odontológico", pharmacy: "Farmácia",
+
     centre: "Centro de saúde", health_post: "Posto de saúde",
+
     laboratory: "Laboratório", physiotherapist: "Fisioterapia",
+
   },
+
   leisure: {
+
     park: "Parque", garden: "Jardim", nature_reserve: "Reserva natural",
+
     playground: "Parque infantil", sports_centre: "Centro esportivo",
+
     pitch: "Quadra esportiva", stadium: "Estádio", swimming_pool: "Piscina",
+
     fitness_centre: "Academia", recreation_ground: "Área de lazer",
+
   },
+
   tourism: {
+
     museum: "Museu", attraction: "Atração turística", viewpoint: "Mirante",
+
     artwork: "Obra de arte", information: "Informações turísticas",
+
     hotel: "Hotel", hostel: "Albergue", guest_house: "Pousada",
+
   },
+
   public_transport: {
+
     platform: "Plataforma de embarque", station: "Estação", stop_position: "Ponto de parada",
+
   },
+
   highway: {
+
     bus_stop: "Parada de ônibus", residential: "Rua residencial",
+
     primary: "Via principal", secondary: "Via secundária", tertiary: "Via terciária",
+
     trunk: "Via expressa", motorway: "Rodovia", service: "Via de serviço",
+
     pedestrian: "Via de pedestres", footway: "Caminho de pedestres",
+
     cycleway: "Ciclovia", path: "Caminho", steps: "Escadaria",
+
     unclassified: "Via não classificada", living_street: "Rua compartilhada",
+
   },
+
   railway: {
+
     station: "Estação", halt: "Parada", tram_stop: "Parada de bonde",
+
     rail: "Ferrovia", light_rail: "Veículo leve sobre trilhos",
+
   },
+
   surface: {
+
     asphalt: "Asfalto", concrete: "Concreto", paved: "Pavimentada",
+
     unpaved: "Não pavimentada", paving_stones: "Calçamento",
+
     cobblestone: "Paralelepípedo", gravel: "Cascalho",
+
     ground: "Terra", dirt: "Terra", sand: "Areia", grass: "Grama",
+
   },
+
   building: {
+
     school: "Escola", university: "Universidade", hospital: "Hospital",
+
     residential: "Residencial", apartments: "Prédio de apartamentos",
+
     house: "Casa", commercial: "Comercial", public: "Prédio público",
+
     government: "Prédio governamental", church: "Igreja",
+
   },
+
   landuse: {
+
     residential: "Residencial", commercial: "Comercial", industrial: "Industrial",
+
     retail: "Comércio varejista", farmland: "Área agrícola", forest: "Floresta",
+
     grass: "Gramado", cemetery: "Cemitério", recreation_ground: "Área de lazer",
+
   },
+
   access: {
+
     yes: "Permitido", no: "Proibido", private: "Privado",
+
     permissive: "Permitido com restrições", designated: "Destinado a esse uso",
+
     customers: "Somente clientes", destination: "Somente acesso ao destino",
+
   },
+
   "operator:type": {
+
     public: "Pública", private: "Privada", government: "Governamental",
+
     ngo: "Organização não governamental", religious: "Religiosa",
+
   },
+
   wheelchair: { yes: "Acessível", no: "Não acessível", limited: "Acesso limitado", designated: "Acesso dedicado" },
+
   "toilets:wheelchair": { yes: "Sim", no: "Não", limited: "Parcialmente" },
+
 };
 
 const YES_NO_POPUP_KEYS = new Set([
+
   "oneway", "lit", "bridge", "tunnel", "tactile_paving", "foot", "bicycle", "motor_vehicle"
+
 ]);
+
 const POPUP_DATE_KEYS = new Set([
+
   "check_date", "check:date", "survey:date", "start_date", "end_date", "source:date"
+
 ]);
+
 const POPUP_HIDDEN_KEYS = new Set(["@id", "@geometry"]);
 
 function displayPopupValue(key, value) {
+
   if (value !== null && typeof value === "object") return JSON.stringify(value);
+
   if (typeof value === "boolean") return value ? "Sim" : "Não";
 
   const original = String(value);
+
   const normalizedValue = original.trim().toLowerCase();
+
   const translated = POPUP_VALUE_TRANSLATIONS[key]?.[normalizedValue];
+
   if (translated) return translated;
 
   if (YES_NO_POPUP_KEYS.has(key)) {
+
     if (normalizedValue === "yes") return "Sim";
+
     if (normalizedValue === "no") return "Não";
+
   }
 
   // Converte apenas datas completas ISO. Evita deslocamentos por fuso horário.
+
   if (POPUP_DATE_KEYS.has(key) && /^\d{4}-\d{2}-\d{2}$/.test(original)) {
+
     const [year, month, day] = original.split("-");
+
     return `${day}/${month}/${year}`;
+
   }
 
   return original;
+
 }
 
 function formatPopupAttribute(key, value) {
+
   const normalized = key.toLowerCase();
 
   // Medições realizadas no editor continuam sendo exibidas em km ou km².
+
   if (normalized === "area_m2") return { label: "Área", value: formatUnit(value, 1_000_000, "km²") };
+
   if (["area_km2", "area_km²"].includes(normalized)) return { label: "Área", value: formatUnit(value, 1, "km²") };
+
   if (normalized === "perimetro_m") return { label: "Perímetro", value: formatUnit(value, 1_000, "km") };
+
   if (["perimetro_km", "perímetro_km"].includes(normalized)) return { label: "Perímetro", value: formatUnit(value, 1, "km") };
+
   if (normalized === "comprimento_m") return { label: "Distância", value: formatUnit(value, 1_000, "km") };
+
   if (["comprimento_km", "distancia_km", "distância_km"].includes(normalized)) return { label: "Distância", value: formatUnit(value, 1, "km") };
 
   const friendlyName = POPUP_ATTRIBUTE_LABELS[normalized];
+
   const fallbackName = key.replace(/[_:]/g, " ").replace(/^./, (letter) => letter.toUpperCase());
+
   return {
+
     label: friendlyName || fallbackName,
+
     value: displayPopupValue(normalized, value),
+
   };
+
 }
 
 // Alguns GeoJSONs do OSM trazem campos dentro de "tags". Exibimos os campos
+
 // individualmente em vez de um objeto JSON, priorizando os campos do nível principal.
+
 function getPopupAttributes(properties) {
+
   const attributes = Object.entries(properties).filter(([key]) => key !== "tags");
+
   const tags = properties.tags;
+
   if (tags && typeof tags === "object" && !Array.isArray(tags)) {
+
     const known = new Set(attributes.map(([key]) => key.toLowerCase()));
+
     for (const [key, value] of Object.entries(tags)) {
+
       if (!known.has(key.toLowerCase())) attributes.push([key, value]);
+
     }
+
   }
+
   return attributes;
+
 }
 
 // Estilos somente de apresentacao: sem alterar os dados ou os enderecos GeoJSON.
 
-const PRESENTATION_STYLE_ID = "sobral-geojson-popup-visual-v3";
+const PRESENTATION_STYLE_ID = "sobral-geojson-popup-visual-v4";
 
 function ensurePresentationStyles() {
 
@@ -711,44 +918,26 @@ function ensurePresentationStyles() {
 
     }
 
-    /* Rótulo discreto e sempre horizontal, inclusive para nomes longos. */
-
+    /* Aparência original dos rótulos de bairros e outras geometrias. */
     .leaflet-tooltip.sobral-geojson-label {
-
       display: inline-block !important;
-
       width: max-content !important;
-
       min-width: max-content !important;
-
       max-width: none !important;
-
       white-space: nowrap !important;
-
       overflow-wrap: normal !important;
-
       word-break: normal !important;
-
       writing-mode: horizontal-tb !important;
-
-      background: rgba(255, 255, 255, .96) !important;
-
-      border: 1px solid #93c5fd !important;
-
+      background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%) !important;
       color: #1e40af !important;
-
-      padding: 4px 8px !important;
-
-      border-radius: 7px !important;
-
-      font: 700 11px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif !important;
-
-      box-shadow: 0 1px 4px rgba(15, 23, 42, .12) !important;
-
-      text-align: center;
-
+      border: 1px solid #bfdbfe !important;
+      border-left: 4px solid #2563eb !important;
+      padding: 9px 14px !important;
+      border-radius: 12px !important;
+      font: 800 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif !important;
+      box-shadow: 0 4px 14px rgba(30, 64, 175, .16) !important;
+      text-align: center !important;
       pointer-events: none !important;
-
     }
 
     .leaflet-tooltip.sobral-geojson-label::before { display: none !important; }
