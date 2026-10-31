@@ -1191,7 +1191,7 @@ function LayerRow({
 
       <label
         htmlFor={inputId}
-        className="text-sm font-medium text-gray-700 truncate flex-1 cursor-pointer"
+        className="text-sm font-medium text-gray-700 flex-1 min-w-0 whitespace-normal break-words leading-relaxed cursor-pointer"
       >
         {layer.name}
       </label>
