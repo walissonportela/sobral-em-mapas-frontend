@@ -34,6 +34,7 @@ const API_BASE_URL =
 
 export default function Map({
   activeLayers = [],
+  layerViewSettings = {},
   searchLocation,
   mapToolsRef,
 }) {
@@ -370,7 +371,11 @@ export default function Map({
         {activeLayers
           .filter((layer) => layer.source_format === "GEOJSON")
           .map((layer) => (
-            <LocalGeoJSONLayer key={layer.id} layer={layer} />
+            <LocalGeoJSONLayer
+              key={layer.id}
+              layer={layer}
+              viewSettings={layerViewSettings[String(layer.id)]}
+            />
           ))}
 
 

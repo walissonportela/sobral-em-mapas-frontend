@@ -27,14 +27,19 @@ function geometryKind(geometry) {
   return "other";
 }
 
-function readStyle(feature) {
+// A substituição de cor é somente visual: não modifica o GeoJSON original.
+function readStyle(feature, colorOverride = null) {
   const saved = feature?.properties?.estilo;
   const data = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
-  const color = HEX_COLOR.test(data.cor || "") ? data.cor.toLowerCase() : DEFAULT_COLOR;
   const hasSavedColor = HEX_COLOR.test(data.cor || "");
+  const originalColor = hasSavedColor ? data.cor.toLowerCase() : DEFAULT_COLOR;
+  const temporaryColor = HEX_COLOR.test(colorOverride || "")
+    ? colorOverride.toLowerCase()
+    : null;
+
   return {
-    color,
-    fillColor: hasSavedColor ? color : DEFAULT_FILL,
+    color: temporaryColor || originalColor,
+    fillColor: temporaryColor || (hasSavedColor ? originalColor : DEFAULT_FILL),
     width: clamp(data.espessura, 1, 20, 2),
     opacity: clamp(data.opacidade_linha, 0, 1, 1),
     fillOpacity: clamp(data.opacidade_preenchimento, 0, 1, 0.12),
@@ -45,7 +50,7 @@ function readStyle(feature) {
   };
 }
 
-function legendGroups(geojson) {
+function legendGroups(geojson, colorOverride = null) {
   const features = geojson?.type === "FeatureCollection"
     ? geojson.features
     : geojson?.type === "Feature"
@@ -58,7 +63,7 @@ function legendGroups(geojson) {
     if (!feature?.geometry) continue;
     const kind = geometryKind(feature.geometry);
     if (kind === "other") continue;
-    const style = readStyle(feature);
+    const style = readStyle(feature, colorOverride);
     const key = JSON.stringify([kind, ...Object.values(style)]);
     const existing = groups.get(key);
     if (existing) {
@@ -121,14 +126,16 @@ function Symbol({ group }) {
 
 /**
  * Legenda dinâmica para cartões GeoJSON da Sidebar.
- * Lê exclusivamente a URL pública publicada (ou o arquivo local antigo),
- * sem depender dos dados da API administrativa e sem modificar os arquivos.
+ * As cores temporárias acompanham o mapa sem alterar as fontes de dados.
  */
-export default function GeoJSONLegend({ layer }) {
+export default function GeoJSONLegend({ layer, colorOverride = null }) {
   const [result, setResult] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const path = layer?.geojson_path || "";
   const validPath = LOCAL_PATH.test(path) || LARAVEL_PATH.test(path);
+  const displayColor = HEX_COLOR.test(colorOverride || "")
+    ? colorOverride.toLowerCase()
+    : null;
 
   useEffect(() => {
     if (!validPath) return undefined;
@@ -158,9 +165,12 @@ export default function GeoJSONLegend({ layer }) {
     return () => controller.abort();
   }, [path, validPath, layer?.name]);
 
+  // A troca de cor só recalcula a simbologia; não baixa novamente o arquivo.
   const groups = useMemo(
-    () => (result?.path === path && result.ok ? legendGroups(result.data) : []),
-    [result, path]
+    () => (result?.path === path && result.ok
+      ? legendGroups(result.data, displayColor)
+      : []),
+    [result, path, displayColor]
   );
   const waiting = validPath && result?.path !== path;
   const error = !validPath || (result?.path === path && !result.ok);

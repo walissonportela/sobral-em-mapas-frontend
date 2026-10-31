@@ -48,6 +48,8 @@ const API_BASE_URL =
 
 export default function Sidebar({
   activeLayers = [],
+  layerViewSettings = {},
+  onLayerViewSettingsChange,
   onToggleLayer,
   onClearMap,
   onSearchLocation,
@@ -552,7 +554,6 @@ export default function Sidebar({
                     text-blue-100
                     border
                     border-white/10
-                    flex items-center justify-center text-center
                   "
                 >
                   {loading && layers.length === 0 ? "..." : `${layers.length} mapas`}
@@ -817,7 +818,11 @@ export default function Sidebar({
         )}
 
         {activePanel === "legends" && (
-          <LegendPanel activeLayers={activeLayers} />
+          <LegendPanel
+            activeLayers={activeLayers}
+            layerViewSettings={layerViewSettings}
+            onLayerViewSettingsChange={onLayerViewSettingsChange}
+          />
         )}
 
         {activePanel === "search" && (
@@ -1191,7 +1196,7 @@ function LayerRow({
 
       <label
         htmlFor={inputId}
-        className="text-sm font-medium text-gray-700 flex-1 min-w-0 whitespace-normal break-words leading-relaxed cursor-pointer"
+        className="text-sm font-medium text-gray-700 truncate flex-1 cursor-pointer"
       >
         {layer.name}
       </label>
@@ -1266,7 +1271,11 @@ export function PanelHeader({
   );
 }
 
-function LegendPanel({ activeLayers = [] }) {
+function LegendPanel({
+  activeLayers = [],
+  layerViewSettings = {},
+  onLayerViewSettingsChange,
+}) {
   const [hiddenLayerIds, setHiddenLayerIds] =
     useState([]);
 
@@ -1319,9 +1328,9 @@ function LegendPanel({ activeLayers = [] }) {
               <LegendCard
                 key={layer.id}
                 layer={layer}
-                onHide={() =>
-                  handleHideLegend(layer.id)
-                }
+                visualSettings={layerViewSettings[String(layer.id)]}
+                onChangeSettings={(changes) => onLayerViewSettingsChange?.(layer.id, changes)}
+                onHide={() => handleHideLegend(layer.id)}
               />
             ))}
 
@@ -1342,7 +1351,7 @@ function LegendPanel({ activeLayers = [] }) {
 }
 
 
-function LegendCard({ layer, onHide }) {
+function LegendCard({ layer, onHide, visualSettings = {}, onChangeSettings }) {
   const [legendError, setLegendError] =
     useState(false);
 
@@ -1408,9 +1417,74 @@ function LegendCard({ layer, onHide }) {
           </p>
         )}
 
+        {/* Personalização temporária e independente para cada GeoJSON. */}
+        {isGeoJSON && (
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 space-y-3">
+            <div>
+              <p className="text-xs font-extrabold text-blue-800">Personalização da visualização</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Ajustes locais que não modificam o arquivo nem o cadastro.
+              </p>
+            </div>
+
+            <label className="block text-xs font-semibold text-slate-700">
+              Exibição dos nomes
+              <select
+                aria-label={`Exibição dos nomes da camada ${layer.name}`}
+                value={visualSettings?.labelMode || "auto"}
+                onChange={(event) => onChangeSettings?.({ labelMode: event.target.value })}
+                className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="auto">Automática conforme o zoom</option>
+                <option value="icons">Somente ícones (sem nomes fixos)</option>
+                <option value="names">Mostrar todos os nomes</option>
+              </select>
+            </label>
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              No modo automático, nomes de áreas são mostrados ao aproximar;
+              pontos usam ícones e exibem nomes ao passar o mouse; linhas não recebem etiquetas fixas.
+            </p>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold text-slate-700">Cor temporária da camada</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#d97706", "#0891b2"].map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    title={`Aplicar cor ${color}`}
+                    aria-label={`Aplicar cor ${color} à camada ${layer.name}`}
+                    aria-pressed={visualSettings?.color === color}
+                    onClick={() => onChangeSettings?.({ color })}
+                    className={`h-7 w-7 rounded-full border-2 transition hover:scale-110 ${visualSettings?.color === color ? "ring-2 ring-offset-2 ring-blue-500 border-white" : "border-white shadow-sm"}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+                <input
+                  type="color"
+                  aria-label={`Escolher outra cor para ${layer.name}`}
+                  title="Escolher outra cor"
+                  value={visualSettings?.color || "#2563eb"}
+                  onChange={(event) => onChangeSettings?.({ color: event.target.value })}
+                  className="h-7 w-8 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+                />
+              </div>
+              {visualSettings?.color && (
+                <button
+                  type="button"
+                  onClick={() => onChangeSettings?.({ color: null })}
+                  className="mt-2 text-xs font-semibold text-blue-700 hover:underline"
+                >
+                  Restaurar cores originais
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Legenda GeoJSON */}
         {isGeoJSON ? (
-          <GeoJSONLegend layer={layer} />
+          <GeoJSONLegend layer={layer} colorOverride={visualSettings?.color || null} />
         ) : (
           <>
             {/* Legenda WMS original */}

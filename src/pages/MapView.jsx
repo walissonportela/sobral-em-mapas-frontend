@@ -8,6 +8,22 @@ import TutorialOverlay from "../components/TutorialOverlay";
 
 function MapView() {
   const [activeLayers, setActiveLayers] = useState([]);
+
+  // Preferências temporárias de visualização, separadas por ID da camada.
+  // Não modificam arquivos GeoJSON nem são enviadas ao Laravel.
+  const [layerViewSettings, setLayerViewSettings] = useState({});
+
+  const handleLayerViewSettingsChange = (layerId, changes) => {
+    const key = String(layerId);
+    setLayerViewSettings((previous) => ({
+      ...previous,
+      [key]: {
+        ...previous[key],
+        ...changes,
+      },
+    }));
+  };
+
   const [searchLocation, setSearchLocation] =
     useState(null);
 
@@ -65,6 +81,8 @@ function MapView() {
         <div className="relative h-full">
           <Sidebar
             activeLayers={activeLayers}
+            layerViewSettings={layerViewSettings}
+            onLayerViewSettingsChange={handleLayerViewSettingsChange}
             onToggleLayer={handleLayerToggle}
             onClearMap={handleClearLayers}
             onSearchLocation={handleSearchLocation}
@@ -74,6 +92,7 @@ function MapView() {
 
           <Map
             activeLayers={activeLayers}
+            layerViewSettings={layerViewSettings}
             searchLocation={searchLocation}
             mapToolsRef={mapToolsRef}
           />

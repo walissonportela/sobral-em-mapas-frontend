@@ -1,6 +1,6 @@
-import { createElement, useEffect, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { GeoJSON } from "react-leaflet";
+import { GeoJSON, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import {
   Baby,
@@ -11,6 +11,7 @@ import {
   Church,
   Cross,
   Droplets,
+  Dumbbell,
   Flame,
   Flower2,
   GraduationCap,
@@ -46,9 +47,18 @@ const DEFAULT_STYLE = {
   fillOpacity: 0.12,
 };
 
-function styleForFeature(feature) {
+// Abaixo deste zoom, apenas as geometrias permanecem no mapa.
+// Evita ícones agrupados e rótulos gigantes quando o usuário afasta muito.
+// Zoom 10 ou maior restaura automaticamente os marcadores e os nomes elegíveis.
+const MIN_SYMBOL_ZOOM = 10;
+
+function styleForFeature(feature, colorOverride = null) {
   const saved = feature?.properties?.estilo;
-  if (!saved || typeof saved !== "object") return DEFAULT_STYLE;
+  if (!saved || typeof saved !== "object") {
+    return colorOverride
+      ? { ...DEFAULT_STYLE, color: colorOverride, fillColor: colorOverride }
+      : DEFAULT_STYLE;
+  }
   const color = /^#[0-9a-f]{6}$/i.test(saved.cor || "") ? saved.cor : DEFAULT_STYLE.color;
   const width = Number(saved.espessura);
   const opacity = Number(saved.opacidade_preenchimento);
@@ -57,12 +67,12 @@ function styleForFeature(feature) {
     ? saved.tipo_linha
     : "solid";
   return {
-    color,
+    color: colorOverride || color,
     weight: Number.isFinite(width) ? Math.min(20, Math.max(1, width)) : 2,
     opacity: saved.opacidade_linha !== undefined && Number.isFinite(savedLineOpacity)
       ? Math.min(1, Math.max(0, savedLineOpacity))
       : 1,
-    fillColor: color,
+    fillColor: colorOverride || color,
     fillOpacity: saved.opacidade_preenchimento !== undefined && Number.isFinite(opacity)
       ? Math.min(1, Math.max(0, opacity))
       : 0.12,
@@ -84,6 +94,7 @@ const POINT_ICONS = {
   pharmacy: { component: Pill, color: "#be123c" },
   park: { component: Trees, color: "#15803d" },
   playground: { component: Flower2, color: "#16a34a" },
+  sports: { component: Dumbbell, color: "#2563eb" },
   bus: { component: Bus, color: "#d97706" },
   bicycle: { component: Bike, color: "#0d9488" },
   train: { component: Train, color: "#4f46e5" },
@@ -106,6 +117,7 @@ const POINT_ICONS = {
 // Evita renderizar o mesmo SVG centenas de vezes no mapa.
 
 const markerIconCache = new Map();
+const clusterIconCache = new Map();
 
 function getPointCategory(feature, layer) {
   const properties = feature?.properties || {};
@@ -127,6 +139,7 @@ function getPointCategory(feature, layer) {
   if (amenity === "pharmacy" || healthcare === "pharmacy") return "pharmacy";
   if (["park", "garden", "nature_reserve"].includes(leisure)) return "park";
   if (leisure === "playground") return "playground";
+  if (["sports_centre", "sports_hall", "pitch", "stadium", "fitness_centre", "fitness_station", "track"].includes(leisure)) return "sports";
   if (["bus_station"].includes(amenity) || highway === "bus_stop" || transport === "platform" && attr("bus") === "yes") return "bus";
   if (["bicycle_parking", "bicycle_rental"].includes(amenity)) return "bicycle";
   if (["station", "halt", "tram_stop"].includes(railway)) return "train";
@@ -150,6 +163,7 @@ function getPointCategory(feature, layer) {
     attr("categoria"),
     attr("tipo"),
   ].filter(Boolean).join(" ").toLowerCase();
+  if (/esport|quadra|gin[aá]sio|academia|arena/.test(hint)) return "sports";
   if (/infantil|creche/.test(hint)) return "kindergarten";
   if (/universid|faculdade|ensino superior/.test(hint)) return "university";
   if (/escola|educa|ensino/.test(hint)) return "school";
@@ -166,11 +180,11 @@ function getPointCategory(feature, layer) {
   return "default";
 }
 
-function getMarkerIcon(category, savedStyle) {
+function getMarkerIcon(category, savedStyle, colorOverride = null) {
   const style = POINT_ICONS[category] || POINT_ICONS.default;
   const customColor = savedStyle?.cor;
   // Só aceita hexadecimais, evitando introduzir CSS arbitrário em HTML.
-  const color = /^#[0-9a-f]{6}$/i.test(customColor || "") ? customColor : style.color;
+  const color = colorOverride || (/^#[0-9a-f]{6}$/i.test(customColor || "") ? customColor : style.color);
   const rawSize = Number(savedStyle?.tamanho_ponto);
   const size = savedStyle?.tamanho_ponto !== undefined && Number.isFinite(rawSize)
     ? Math.min(48, Math.max(28, Math.round(rawSize + 16)))
@@ -192,12 +206,6 @@ function getMarkerIcon(category, savedStyle) {
   });
   markerIconCache.set(key, icon);
   return icon;
-}
-
-function pointForFeature(feature, latlng, layer) {
-  const category = getPointCategory(feature, layer);
-  const icon = getMarkerIcon(category, feature?.properties?.estilo);
-  return L.marker(latlng, { icon });
 }
 
 // A unidade apresentada ao usuário é quilômetro (km) ou quilômetro quadrado (km²).
@@ -516,6 +524,29 @@ function ensurePresentationStyles() {
       transform: scale(1.12);
       box-shadow: 0 5px 14px rgba(15, 23, 42, .35);
     }
+    /* Agrupamentos de pontos: indicam quantos estabelecimentos estão próximos. */
+    .leaflet-marker-icon.sobral-geojson-cluster-icon {
+      background: transparent !important;
+      border: 0 !important;
+    }
+    .sobral-geojson-cluster-bubble {
+      width: var(--sobral-cluster-size);
+      height: var(--sobral-cluster-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      background: var(--sobral-cluster-color);
+      color: white;
+      font: 800 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+      box-shadow: 0 3px 11px rgba(15, 23, 42, .3), 0 0 0 5px rgba(37, 99, 235, .15);
+      transition: transform .15s ease;
+    }
+    .sobral-geojson-cluster-icon:hover .sobral-geojson-cluster-bubble {
+      transform: scale(1.09);
+    }
     .leaflet-tooltip.sobral-geojson-point-tooltip {
       background: rgba(255, 255, 255, .98) !important;
       color: #1e40af !important;
@@ -684,10 +715,277 @@ function buildStyledPopup(feature, layer) {
   return root;
 }
 
-export default function LocalGeoJSONLayer({ layer }) {
+// Em zoom distante, nomes são ocultados para evitar sobreposição de etiquetas.
+// A preferência pertence ao componente pai e não é armazenada no GeoJSON.
+function featureLabelIsPermanent(mode, geometryType, zoom, layer) {
+  if (zoom < MIN_SYMBOL_ZOOM) return false;
+  if (mode === "names") return true;
+  if (mode === "icons") return false;
+  if (["Point", "MultiPoint"].includes(geometryType)) return false;
+  if (["LineString", "MultiLineString"].includes(geometryType)) return false;
+  const hint = `${layer?.name || ""} ${layer?.subcategory?.name || ""}`.toLowerCase();
+  const territorial = /bairro|distrit|territor|limite|perímetro|perimetro/.test(hint);
+  return zoom >= (territorial ? 14 : 16);
+}
+
+function polygonIconFeatures(geojson, layer, colorOverride) {
+  const features = geojson?.type === "FeatureCollection"
+    ? geojson.features
+    : geojson?.type === "Feature" ? [geojson] : [];
+  // Limite intencional para não criar milhares de marcadores em áreas muito densas.
+  return features.filter((item) => ["Polygon", "MultiPolygon"].includes(item?.geometry?.type))
+    .slice(0, 300)
+    .flatMap((feature, index) => {
+      try {
+        const bounds = L.geoJSON(feature).getBounds();
+        if (!bounds.isValid()) return [];
+        return [{
+          key: String(feature.id ?? index),
+          position: bounds.getCenter(),
+          feature,
+          icon: getMarkerIcon(getPointCategory(feature, layer), feature?.properties?.estilo, colorOverride),
+        }];
+      } catch {
+        return [];
+      }
+    });
+}
+
+// Transforma geometrias pontuais em itens próprios para agrupamento e mantém
+// polígonos/linhas no GeoJSON original. Isso evita desenhar os pontos duas vezes.
+function separateGeoJSON(data) {
+  const shapes = [];
+  const points = [];
+  const features = data?.type === "FeatureCollection"
+    ? (data.features || [])
+    : data?.type === "Feature"
+      ? [data]
+      : data?.type ? [{ type: "Feature", properties: {}, geometry: data }] : [];
+
+  function processGeometry(feature, geometry, id) {
+    if (!geometry) return;
+    if (geometry.type === "GeometryCollection") {
+      (geometry.geometries || []).forEach((item, index) => {
+        processGeometry(feature, item, `${id}-${index}`);
+      });
+      return;
+    }
+    if (geometry.type === "Point" || geometry.type === "MultiPoint") {
+      const coordinates = geometry.type === "Point"
+        ? [geometry.coordinates]
+        : geometry.coordinates;
+      if (!Array.isArray(coordinates)) return;
+      coordinates.forEach((coordinatesPair, index) => {
+        if (!Array.isArray(coordinatesPair) || coordinatesPair.length < 2) return;
+        const longitude = Number(coordinatesPair[0]);
+        const latitude = Number(coordinatesPair[1]);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+        if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return;
+        points.push({
+          key: `p-${id}-${index}`,
+          feature: {
+            ...feature,
+            geometry: { type: "Point", coordinates: [longitude, latitude] },
+          },
+          position: L.latLng(latitude, longitude),
+        });
+      });
+      return;
+    }
+    shapes.push({ ...feature, geometry });
+  }
+
+  features.forEach((feature, index) => {
+    processGeometry(feature, feature?.geometry, index);
+  });
+  return { shapes: { type: "FeatureCollection", features: shapes }, points };
+}
+
+// Agrupamento por proximidade em pixels projetados. É recalculado no zoom,
+// sem alterar o GeoJSON, e independe de bibliotecas extras no package.json.
+function clusterNearbyMarkers(markers, map, zoom) {
+  const radius = zoom <= 12 ? 68 : zoom <= 15 ? 58 : 46;
+  const cellSize = radius;
+  const buckets = new Map();
+  const groups = [];
+  const squaredRadius = radius * radius;
+
+  for (const item of markers) {
+    const projected = map.project(item.position, zoom);
+    const cellX = Math.floor(projected.x / cellSize);
+    const cellY = Math.floor(projected.y / cellSize);
+    let nearest = null;
+    let nearestDistance = squaredRadius;
+
+    for (let offsetX = -1; offsetX <= 1; offsetX++) {
+      for (let offsetY = -1; offsetY <= 1; offsetY++) {
+        const bucket = buckets.get(`${cellX + offsetX}:${cellY + offsetY}`) || [];
+        for (const group of bucket) {
+          const dx = projected.x - group.anchorX;
+          const dy = projected.y - group.anchorY;
+          const distance = dx * dx + dy * dy;
+          if (distance <= nearestDistance) {
+            nearestDistance = distance;
+            nearest = group;
+          }
+        }
+      }
+    }
+
+    if (nearest) {
+      nearest.items.push(item);
+      nearest.sumX += projected.x;
+      nearest.sumY += projected.y;
+    } else {
+      const group = {
+        key: item.key,
+        items: [item],
+        anchorX: projected.x,
+        anchorY: projected.y,
+        sumX: projected.x,
+        sumY: projected.y,
+      };
+      groups.push(group);
+      const bucketKey = `${cellX}:${cellY}`;
+      if (!buckets.has(bucketKey)) buckets.set(bucketKey, []);
+      buckets.get(bucketKey).push(group);
+    }
+  }
+
+  return groups.map((group) => ({
+    key: `group-${group.key}-${zoom}`,
+    items: group.items,
+    position: map.unproject(L.point(
+      group.sumX / group.items.length,
+      group.sumY / group.items.length
+    ), zoom),
+  }));
+}
+
+function getClusterIcon(count, colorOverride) {
+  const color = colorOverride || "#1d4ed8";
+  const size = count < 10 ? 42 : count < 100 ? 48 : 54;
+  const key = `${count}-${color}`;
+  if (clusterIconCache.has(key)) return clusterIconCache.get(key);
+  const icon = L.divIcon({
+    html: `<span class="sobral-geojson-cluster-bubble" style="--sobral-cluster-color:${color};--sobral-cluster-size:${size}px">${count}</span>`,
+    className: "sobral-geojson-cluster-icon",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+  });
+  clusterIconCache.set(key, icon);
+  return icon;
+}
+
+function featureDisplayName(feature, layer) {
+  const props = feature?.properties || {};
+  return props.nome || props.name || props.title || layer.name || "Elemento do mapa";
+}
+
+// Para marcadores no mesmo endereço, mesmo o maior zoom pode não separá-los.
+// A lista permite abrir o popup de cada estabelecimento individualmente.
+function showClusterItems(map, group, layer) {
+  const root = domElement("div", "sobral-geojson-cluster-list");
+  root.style.cssText = "font-family:system-ui,sans-serif;max-height:300px;overflow-y:auto;padding:8px 4px";
+  const title = domElement("strong", "", `${group.items.length} elementos neste local`);
+  title.style.cssText = "display:block;color:#1e40af;margin-bottom:10px";
+  root.appendChild(title);
+
+  group.items.forEach((item) => {
+    const button = domElement("button", "", featureDisplayName(item.feature, layer));
+    button.type = "button";
+    button.style.cssText = "display:block;width:100%;padding:8px;text-align:left;border:0;border-bottom:1px solid #e2e8f0;background:#fff;color:#334155;cursor:pointer";
+    button.addEventListener("click", () => {
+      L.popup({ className: "sobral-geojson-popup", maxWidth: 360 })
+        .setLatLng(item.position)
+        .setContent(buildStyledPopup(item.feature, layer))
+        .openOn(map);
+    });
+    root.appendChild(button);
+  });
+  L.popup({ maxWidth: 360 }).setLatLng(group.position).setContent(root).openOn(map);
+}
+
+function SingleFeatureMarker({ item, layer, mode }) {
+  const markerRef = useRef(null);
+  const name = featureDisplayName(item.feature, layer);
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker) return undefined;
+    marker.bindPopup(buildStyledPopup(item.feature, layer), {
+      maxWidth: 360,
+      className: "sobral-geojson-popup",
+    });
+    if (name) {
+      marker.bindTooltip(String(name), {
+        permanent: mode === "names",
+        direction: "top",
+        className: "sobral-geojson-point-tooltip",
+        opacity: 0.95,
+      });
+    }
+    return () => {
+      marker.unbindPopup();
+      marker.unbindTooltip();
+    };
+  }, [item.feature, layer, mode, name]);
+  return <Marker position={item.position} icon={item.icon} ref={markerRef} />;
+}
+
+function ClusteredFeatureMarker({ group, map, zoom, layer, colorOverride }) {
+  const onClick = () => {
+    const maxZoom = map.getMaxZoom();
+    const limit = Number.isFinite(maxZoom) ? maxZoom : 19;
+    if (zoom < limit) {
+      map.setView(group.position, Math.min(limit, zoom + 2), { animate: true });
+    } else {
+      showClusterItems(map, group, layer);
+    }
+  };
+  return (
+    <Marker
+      position={group.position}
+      icon={getClusterIcon(group.items.length, colorOverride)}
+      eventHandlers={{ click: onClick }}
+    />
+  );
+}
+
+export default function LocalGeoJSONLayer({ layer, viewSettings = {} }) {
   const [loaded, setLoaded] = useState(null);
+  const map = useMapEvents({ zoomend: (event) => setZoom(event.target.getZoom()) });
+  const [zoom, setZoom] = useState(() => map.getZoom());
+  const showDetails = zoom >= MIN_SYMBOL_ZOOM;
   const path = layer.geojson_path;
+  const mode = ["auto", "icons", "names"].includes(viewSettings?.labelMode)
+    ? viewSettings.labelMode : "auto";
+  const colorOverride = /^#[0-9a-f]{6}$/i.test(viewSettings?.color || "")
+    ? viewSettings.color : null;
   const geojson = loaded?.path === path ? loaded.data : null;
+
+  const separated = useMemo(() => (geojson ? separateGeoJSON(geojson) : null), [geojson]);
+  const polygonMarkers = useMemo(
+    () => (showDetails && mode === "icons" && geojson
+      ? polygonIconFeatures(geojson, layer, colorOverride)
+      : []),
+    [showDetails, mode, geojson, layer, colorOverride]
+  );
+  const individualMarkers = useMemo(() => {
+    if (!separated || !showDetails) return [];
+    const pointMarkers = separated.points.map((item) => ({
+      ...item,
+      icon: getMarkerIcon(getPointCategory(item.feature, layer), item.feature?.properties?.estilo, colorOverride),
+    }));
+    return [...pointMarkers, ...polygonMarkers.map((item) => ({ ...item, key: `area-${item.key}` }))];
+  }, [separated, polygonMarkers, layer, colorOverride, showDetails]);
+  const markerGroups = useMemo(
+    () => (showDetails ? clusterNearbyMarkers(individualMarkers, map, zoom) : []),
+    [individualMarkers, map, zoom, showDetails]
+  );
+
+  const areaNames = zoom >= 14;
+  const otherNames = zoom >= 16;
   useEffect(() => {
     ensurePresentationStyles();
   }, []);
@@ -718,34 +1016,53 @@ export default function LocalGeoJSONLayer({ layer }) {
       });
     return () => controller.abort();
   }, [path, layer.name]);
-  if (!geojson) return null;
+
+  if (!geojson || !separated) return null;
   return (
-    <GeoJSON
-      data={geojson}
-      style={styleForFeature}
-      pointToLayer={(feature, latlng) => pointForFeature(feature, latlng, layer)}
-      onEachFeature={(feature, leafletLayer) => {
-        const properties = feature.properties || {};
-        const name = properties.nome || properties.name || properties.title;
-        const geometryType = feature.geometry?.type || "";
-        const isPoint = geometryType === "Point" || geometryType === "MultiPoint";
-        const showLabel = [
-          "Polygon", "MultiPolygon", "LineString", "MultiLineString", "Point", "MultiPoint"
-        ].includes(geometryType);
-        if (name && showLabel) {
-          leafletLayer.bindTooltip(String(name), {
-            // Pontos só mostram o nome ao passar o mouse; áreas/linhas mantêm os rótulos.
-            permanent: !isPoint,
-            direction: isPoint ? "top" : "center",
-            className: isPoint ? "sobral-geojson-point-tooltip" : "sobral-geojson-label",
-            opacity: 0.95,
-          });
-        }
-        leafletLayer.bindPopup(buildStyledPopup(feature, layer), {
-          maxWidth: 360,
-          className: "sobral-geojson-popup",
-        });
-      }}
-    />
+    <>
+      {separated.shapes.features.length > 0 && (
+        <GeoJSON
+          key={`${mode}-${colorOverride || "original"}-${showDetails}-${areaNames}-${otherNames}`}
+          data={separated.shapes}
+          style={(feature) => styleForFeature(feature, colorOverride)}
+          onEachFeature={(feature, leafletLayer) => {
+            const properties = feature.properties || {};
+            const name = properties.nome || properties.name || properties.title;
+            const geometryType = feature.geometry?.type || "";
+            // Abaixo do zoom mínimo não cria nem tooltip de hover.
+            // Popups e geometrias continuam disponíveis normalmente.
+            if (name && showDetails) {
+              leafletLayer.bindTooltip(String(name), {
+                permanent: featureLabelIsPermanent(mode, geometryType, zoom, layer),
+                direction: "center",
+                className: "sobral-geojson-label",
+                opacity: 0.95,
+              });
+            }
+            leafletLayer.bindPopup(buildStyledPopup(feature, layer), {
+              maxWidth: 360,
+              className: "sobral-geojson-popup",
+            });
+          }}
+        />
+      )}
+      {markerGroups.map((group) => group.items.length > 1 ? (
+        <ClusteredFeatureMarker
+          key={group.key}
+          group={group}
+          map={map}
+          zoom={zoom}
+          layer={layer}
+          colorOverride={colorOverride}
+        />
+      ) : (
+        <SingleFeatureMarker
+          key={group.items[0].key}
+          item={group.items[0]}
+          layer={layer}
+          mode={mode}
+        />
+      ))}
+    </>
   );
 }
