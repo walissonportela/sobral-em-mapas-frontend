@@ -80,8 +80,8 @@ const DEFAULT_STYLE = {
 
 // Abaixo deste zoom, apenas as geometrias permanecem no mapa.
 // Evita ícones agrupados e rótulos gigantes quando o usuário afasta muito.
-// Zoom 11 ou maior restaura automaticamente os marcadores e os nomes elegíveis.
-const MIN_SYMBOL_ZOOM = 12;
+// Zoom 10 ou maior restaura automaticamente os marcadores e os nomes elegíveis.
+const MIN_SYMBOL_ZOOM = 10;
 
 function styleForFeature(feature, colorOverride = null, strokeWidthOverride = null) {
   // A espessura escolhida na sidebar vale somente nesta visualização.
