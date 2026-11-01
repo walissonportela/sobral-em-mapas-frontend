@@ -1524,7 +1524,7 @@ export default function LayerFormModal({
 
                       disabled={loading}
 
-                      placeholder="Ex.: Escolas municipais"
+                      placeholder="Ex.: Bairros de Sobral"
 
                       className={inputClass}
 
@@ -1540,7 +1540,7 @@ export default function LayerFormModal({
 
                     help={isGeoJSON
 
-                      ? "Identificador único para a camada. Ex.: bairros_sobral_2023."
+                      ? "Identificador único para a camada. Ex.: bairros_sobral."
 
                       : "Pode colar Ceara:escolas_municipais; o sistema salva somente escolas_municipais."}
 
@@ -1562,7 +1562,7 @@ export default function LayerFormModal({
 
                       disabled={loading}
 
-                      placeholder={isGeoJSON ? "Ex.: bairros_sobral_2023" : "Ex.: escolas_municipais"}
+                      placeholder={isGeoJSON ? "Ex.: bairros_sobral" : "Ex.: escolas_municipais"}
 
                       className={inputClass}
 

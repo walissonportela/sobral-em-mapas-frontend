@@ -1479,12 +1479,72 @@ function LegendCard({ layer, onHide, visualSettings = {}, onChangeSettings }) {
                 </button>
               )}
             </div>
+
+            {/* Espessura temporária para linhas e bordas de polígonos. */}
+            <div className="border-t border-blue-100 pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor={`espessura-camada-${layer.id}`}
+                  className="text-xs font-semibold text-slate-700"
+                >
+                  Espessura das linhas e contornos
+                </label>
+                <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-[11px] font-bold text-blue-800 border border-blue-100">
+                  {visualSettings?.strokeWidth == null
+                    ? "Original"
+                    : `${visualSettings.strokeWidth} px`}
+                </span>
+              </div>
+              <input
+                id={`espessura-camada-${layer.id}`}
+                type="range"
+                min="1"
+                max="12"
+                step="1"
+                value={visualSettings?.strokeWidth ?? 3}
+                onChange={(event) =>
+                  onChangeSettings?.({ strokeWidth: Number(event.target.value) })
+                }
+                className="mt-3 w-full cursor-pointer accent-blue-700"
+                aria-label={`Espessura das linhas e contornos de ${layer.name}`}
+              />
+              <div className="flex items-center justify-between text-[10px] text-slate-500">
+                <span>Fina · 1 px</span>
+                <span>Grossa · 12 px</span>
+              </div>
+              <div className="mt-3 flex items-center justify-center rounded-lg border border-blue-100 bg-white py-3">
+                <div
+                  aria-hidden="true"
+                  className="w-4/5 rounded-full transition-all duration-150"
+                  style={{
+                    height: `${visualSettings?.strokeWidth ?? 3}px`,
+                    backgroundColor: visualSettings?.color || "#2563eb",
+                  }}
+                />
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                Afeta linhas e bordas de áreas; marcadores pontuais não mudam de tamanho.
+              </p>
+              {visualSettings?.strokeWidth != null && (
+                <button
+                  type="button"
+                  onClick={() => onChangeSettings?.({ strokeWidth: null })}
+                  className="mt-2 text-xs font-semibold text-blue-700 hover:underline"
+                >
+                  Restaurar espessura original
+                </button>
+              )}
+            </div>
           </div>
         )}
 
         {/* Legenda GeoJSON */}
         {isGeoJSON ? (
-          <GeoJSONLegend layer={layer} colorOverride={visualSettings?.color || null} />
+          <GeoJSONLegend
+            layer={layer}
+            colorOverride={visualSettings?.color || null}
+            strokeWidthOverride={visualSettings?.strokeWidth ?? null}
+          />
         ) : (
           <>
             {/* Legenda WMS original */}

@@ -3,502 +3,501 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
+import { ArrowLeft, ArrowRight, MousePointer2, X } from "lucide-react";
 
-import {
-  ArrowLeft,
-  ArrowRight,
-  X,
-  MousePointer2,
-} from "lucide-react";
+const SCREEN_MARGIN = 12;
+const CARD_GAP = 16;
+const MOBILE_BREAKPOINT = 768;
+// O destaque e o cartão viajam juntos até o próximo controle.
+const MOVE_DURATION = 480;
+const FADE_OUT_DURATION = 160;
+const STEP_LOCK_DURATION = 450;
+const MOTION_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+const MOTION_TRANSITION = `top ${MOVE_DURATION}ms ${MOTION_EASING}, left ${MOVE_DURATION}ms ${MOTION_EASING}, width ${MOVE_DURATION}ms ${MOTION_EASING}, height ${MOVE_DURATION}ms ${MOTION_EASING}`;
 
-export default function TutorialOverlay({
-  open,
-  onClose,
-}) {
+
+function buildSteps(isMobile) {
+  const suffix = isMobile ? "-mobile" : "";
+  const sidebarStep = {
+    placement: isMobile ? "bottom" : "right",
+    spotlightPadding: 5,
+    scrollToTarget: isMobile,
+  };
+
+  const steps = [
+    {
+      selector: `[data-tour='sidebar${suffix}']`,
+      title: "Menu lateral",
+      text: "O menu reúne as principais ferramentas: mapas, informações, busca, medição, favoritos, impressão, limpeza e tela cheia.",
+      placement: isMobile ? "bottom" : "right",
+      spotlightPadding: 4,
+      scrollToTarget: isMobile,
+    },
+    {
+      selector: `[data-tour='layers-button${suffix}']`,
+      title: "Mapas",
+      text: "Explore os mapas por categorias e subcategorias. Ative uma ou mais camadas para visualizar as informações sobre o território.",
+      ...sidebarStep,
+    },
+    {
+      selector: `[data-tour='legend-button${suffix}']`,
+      title: "Informações e legendas",
+      text: "Consulte as legendas e descrições das camadas ativas. Para os mapas GeoJSON, você também pode ajustar cores e exibição dos nomes.",
+      ...sidebarStep,
+    },
+    {
+      selector: `[data-tour='search-button${suffix}']`,
+      title: "Busca de locais",
+      text: "Pesquise endereços, bairros, locais de interesse ou coordenadas para encontrá-los no mapa.",
+      ...sidebarStep,
+    },
+    {
+      selector: `[data-tour='measure-button${suffix}']`,
+      title: "Medição",
+      text: "Meça distâncias, perímetros e áreas diretamente no mapa para apoiar sua análise territorial.",
+      ...sidebarStep,
+    },
+    {
+      selector: `[data-tour='bookmarks-button${suffix}']`,
+      title: "Favoritos",
+      text: "Salve os mapas que você consulta com frequência para encontrá-los rapidamente depois.",
+      ...sidebarStep,
+    },
+    {
+      selector: `[data-tour='print-button${suffix}']`,
+      title: "Impressão e exportação",
+      text: "Selecione uma área do mapa e exporte a visualização como PDF, PNG ou JPEG.",
+      ...sidebarStep,
+    },
+    {
+      selector: `[data-tour='clear-button${suffix}']`,
+      title: "Limpar mapa",
+      text: "Remova as camadas ativas e os desenhos ou medições quando quiser começar uma nova consulta.",
+      ...sidebarStep,
+    },
+    {
+      selector: `[data-tour='fullscreen-button${suffix}']`,
+      title: "Tela cheia",
+      text: "Amplie a área disponível para o mapa e aproveite melhor o espaço da tela.",
+      ...sidebarStep,
+    },
+    {
+      selector: "[data-tour='map-controls']",
+      title: "Controles cartográficos",
+      text: "Use os controles de zoom, localização, troca do mapa-base e outras opções de navegação.",
+      placement: isMobile ? "top" : "left",
+      spotlightPadding: 7,
+    },
+    {
+      selector: "[data-tour='contact-button']",
+      title: "Contato",
+      text: "Envie dúvidas, sugestões ou relatos de problemas encontrados durante a utilização da plataforma.",
+      placement: "bottom",
+      spotlightPadding: 7,
+    },
+    {
+      selector: "[data-tour='about-button']",
+      title: "Sobre a plataforma",
+      text: "Conheça o Sobral em Mapas, suas funcionalidades e as formas de explorar informações geográficas do município.",
+      placement: "bottom",
+      spotlightPadding: 7,
+    },
+    {
+      selector: "[data-tour='login-area']",
+      title: "Área do usuário",
+      text: "Acesse sua conta e encontre as opções disponíveis para o seu perfil.",
+      placement: "bottom-left",
+      spotlightPadding: 7,
+    },
+    {
+      selector: "[data-tour='chat-button']",
+      title: "Chat",
+      text: "Quando estiver disponível, o chat oferece orientações e respostas a dúvidas rápidas.",
+      placement: "left",
+      spotlightPadding: 7,
+    },
+  ];
+
+  // Não mostrar passos de controles ocultos na versão móvel.
+  if (isMobile) {
+    return steps.filter(({ selector }) =>
+      !["map-controls", "contact-button", "about-button", "login-area", "chat-button"].some(
+        (name) => selector.includes(name)
+      )
+    );
+  }
+
+  return steps;
+}
+
+function elementIsVisible(element) {
+  if (!element || element.getClientRects().length === 0) return false;
+  const style = window.getComputedStyle(element);
+  return style.display !== "none" && style.visibility !== "hidden";
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}
+
+function sameRect(a, b) {
+  if (!a || !b) return a === b;
+  return ["top", "left", "width", "height"].every(
+    (key) => Math.abs(a[key] - b[key]) < 0.5
+  );
+}
+
+function getHighlightRect(target, padding, viewport) {
+  if (!target) return null;
+  const left = clamp(target.left - padding, 2, viewport.width - 2);
+  const top = clamp(target.top - padding, 2, viewport.height - 2);
+  const right = clamp(target.right + padding, left, viewport.width - 2);
+  const bottom = clamp(target.bottom + padding, top, viewport.height - 2);
+  if (right - left < 1 || bottom - top < 1) return null;
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
+function getCardPosition(target, preferred, size, viewport) {
+  const width = Math.min(380, Math.max(0, viewport.width - SCREEN_MARGIN * 2));
+  const height = Math.min(size.height || 380, Math.max(0, viewport.height - SCREEN_MARGIN * 2));
+  const centerX = target ? (target.left + target.right) / 2 : viewport.width / 2;
+  const centerY = target ? (target.top + target.bottom) / 2 : viewport.height / 2;
+
+  const positions = target
+    ? {
+        right: { left: target.right + CARD_GAP, top: centerY - height / 2 },
+        left: { left: target.left - CARD_GAP - width, top: centerY - height / 2 },
+        bottom: { left: centerX - width / 2, top: target.bottom + CARD_GAP },
+        "bottom-left": { left: target.right - width, top: target.bottom + CARD_GAP },
+        top: { left: centerX - width / 2, top: target.top - CARD_GAP - height },
+      }
+    : {};
+
+  const priority = [preferred, "right", "left", "bottom", "top", "bottom-left"];
+  const options = [...new Set(priority)].map((name) => ({ name, ...positions[name] })).filter(
+    (value) => Number.isFinite(value.left) && Number.isFinite(value.top)
+  );
+
+  const fits = ({ left, top }) =>
+    left >= SCREEN_MARGIN &&
+    top >= SCREEN_MARGIN &&
+    left + width <= viewport.width - SCREEN_MARGIN &&
+    top + height <= viewport.height - SCREEN_MARGIN;
+
+  // Prefere o lado solicitado, mas troca de lado se a caixa sair da tela.
+  const chosen = options.find(fits);
+  if (chosen) return { left: chosen.left, top: chosen.top, width };
+
+  // Em telas pequenas, usa o espaço com menor sobreposição ao alvo.
+  let best = null;
+  let lowestOverlap = Infinity;
+  for (const option of options) {
+    const left = clamp(option.left, SCREEN_MARGIN, viewport.width - width - SCREEN_MARGIN);
+    const top = clamp(option.top, SCREEN_MARGIN, viewport.height - height - SCREEN_MARGIN);
+    const overlapX = target
+      ? Math.max(0, Math.min(left + width, target.right) - Math.max(left, target.left))
+      : 0;
+    const overlapY = target
+      ? Math.max(0, Math.min(top + height, target.bottom) - Math.max(top, target.top))
+      : 0;
+    const overlap = overlapX * overlapY;
+    if (overlap < lowestOverlap) {
+      lowestOverlap = overlap;
+      best = { left, top, width };
+    }
+  }
+  return best || {
+    left: Math.max(SCREEN_MARGIN, (viewport.width - width) / 2),
+    top: Math.max(SCREEN_MARGIN, (viewport.height - height) / 2),
+    width,
+  };
+}
+
+export default function TutorialOverlay({ open, onClose }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [targetRect, setTargetRect] = useState(null);
+  const [viewport, setViewport] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
+  const [cardHeight, setCardHeight] = useState(380);
+  const [contentVisible, setContentVisible] = useState(true);
+  const [isChangingStep, setIsChangingStep] = useState(false);
+  const cardRef = useRef(null);
+  const changeTimerRef = useRef(null);
+  const unlockTimerRef = useRef(null);
 
-  // Calcula os passos e configurações visual dependendo da tela atual
+  const isMobile = viewport.width < MOBILE_BREAKPOINT;
   const steps = useMemo(() => {
-    const isMobile = window.innerWidth < 768;
-    const suffix = isMobile ? "-mobile" : "";
-
-    const sidebarAdjustments = {
-      placement: isMobile ? "bottom" : "right",
-      disableScroll: !isMobile,
-      spotlightPadding: isMobile ? 4 : 3,
-      spotlightOffsetX: isMobile ? 0 : -8,
-      spotlightOffsetY: 0,
-      cardOffsetX: isMobile ? 0 : -8,
-      cardOffsetY: isMobile ? 12 : 0,
-    };
-
-    const allSteps = [
-      {
-        selector: `[data-tour='sidebar${suffix}']`,
-        title: "Menu lateral",
-        text: "Aqui ficam as principais ferramentas do mapa. Você pode acessar mapas, informações, busca, medição, marcadores, impressão, limpar o mapa e ativar tela cheia.",
-        placement: isMobile ? "bottom" : "right",
-        disableScroll: !isMobile,
-        spotlightPadding: 0,
-        spotlightOffsetX: isMobile ? 0 : -8,
-        spotlightOffsetY: 0,
-        cardOffsetX: isMobile ? 0 : -8,
-        cardOffsetY: isMobile ? 12 : 0,
-      },
-      {
-        selector: `[data-tour='layers-button${suffix}']`,
-        title: "Mapas",
-        text: "Neste botão você acessa a lista de mapas temáticos disponíveis. Ao marcar uma camada, ela aparece sobre o mapa.",
-        ...sidebarAdjustments,
-      },
-      {
-        selector: `[data-tour='legend-button${suffix}']`,
-        title: "Informações",
-        text: "Aqui ficam as informações dos mapas ativos, incluindo descrição, categoria, subcategoria e prévia visual quando disponível.",
-        ...sidebarAdjustments,
-      },
-      {
-        selector: `[data-tour='search-button${suffix}']`,
-        title: "Busca de locais",
-        text: "Use esta opção para pesquisar endereços, bairros, locais de interesse ou coordenadas no mapa.",
-        ...sidebarAdjustments,
-      },
-      {
-        selector: `[data-tour='measure-button${suffix}']`,
-        title: "Medição",
-        text: "Nesta ferramenta você pode medir distâncias e áreas diretamente no mapa. É útil para calcular trechos, perímetros e áreas aproximadas.",
-        ...sidebarAdjustments,
-      },
-      {
-        selector: `[data-tour='bookmarks-button${suffix}']`,
-        title: "Favoritos",
-        text: "Aqui ficam os mapas favoritos. Você pode marcar mapas com estrela para acessá-los rapidamente depois.",
-        ...sidebarAdjustments,
-      },
-      {
-        selector: `[data-tour='print-button${suffix}']`,
-        title: "Impressão",
-        text: "Nesta área você poderá imprimir o mapa atual, salvar como PDF e, futuramente, exportar a área do mapa como PNG ou JPEG.",
-        ...sidebarAdjustments,
-      },
-      {
-        selector: `[data-tour='clear-button${suffix}']`,
-        title: "Limpar mapa",
-        text: "Este botão remove os mapas ativos e limpa desenhos ou medições feitas no mapa.",
-        ...sidebarAdjustments,
-      },
-      {
-        selector: `[data-tour='fullscreen-button${suffix}']`,
-        title: "Tela cheia",
-        text: "Use este botão para expandir o sistema em tela cheia e aproveitar melhor a visualização do mapa.",
-        ...sidebarAdjustments,
-      },
-      {
-        selector: "[data-tour='map-controls']",
-        title: "Controles do mapa",
-        text: "Nesta área você encontra os principais controles do mapa, como zoom, localização, troca do mapa base e visualização da legenda.",
-        placement: isMobile ? "top" : "left",
-        disableScroll: true,
-        spotlightPadding: 8,
-        spotlightOffsetX: 0,
-        spotlightOffsetY: 0,
-        cardOffsetX: isMobile ? 0 : -8,
-        cardOffsetY: isMobile ? -12 : 0,
-      },
-      {
-        selector: "[data-tour='contact-button']",
-        title: "Contato",
-        text: "Neste menu você pode enviar dúvidas, sugestões, solicitações ou relatar problemas encontrados no mapa.",
-        placement: isMobile ? "top" : "bottom",
-        disableScroll: true,
-        spotlightPadding: 8,
-        spotlightOffsetX: 0,
-        spotlightOffsetY: 0,
-        cardOffsetX: 0,
-        cardOffsetY: isMobile ? -12 : 0,
-      },
-      {
-        selector: "[data-tour='about-button']",
-        title: "Sobre",
-        text: "Aqui você acessa uma página com informações sobre a cidade e sobre o projeto Sobral em Mapas.",
-        placement: isMobile ? "top" : "bottom",
-        disableScroll: true,
-        spotlightPadding: 8,
-        spotlightOffsetX: 0,
-        spotlightOffsetY: 0,
-        cardOffsetX: 0,
-        cardOffsetY: isMobile ? -12 : 0,
-      },
-      {
-        selector: "[data-tour='login-area']",
-        title: "Área do usuário",
-        text: "Neste espaço ficam as opções de login, acesso administrativo e informações do usuário autenticado.",
-        placement: isMobile ? "top" : "bottom-left",
-        disableScroll: true,
-        spotlightPadding: 8,
-        spotlightOffsetX: 0,
-        spotlightOffsetY: 0,
-        cardOffsetX: 0,
-        cardOffsetY: isMobile ? -12 : 0,
-      },
-      {
-        selector: "[data-tour='chat-button']",
-        title: "Chat",
-        text: "O chat pode auxiliar o usuário com dúvidas rápidas, orientações e apoio durante o uso do sistema.",
-        placement: isMobile ? "top" : "left",
-        disableScroll: true,
-        spotlightPadding: 8,
-        spotlightOffsetX: 0,
-        spotlightOffsetY: 0,
-        cardOffsetX: isMobile ? 0 : -8,
-        cardOffsetY: isMobile ? -12 : 0,
-      },
-    ];
-
-    if (isMobile) {
-      return allSteps.filter(step => 
-        !step.selector.includes('map-controls') &&
-        !step.selector.includes('login-area') &&
-        !step.selector.includes('contact-button') &&
-        !step.selector.includes('about-button') &&
-        !step.selector.includes('chat-button')
-      );
-    }
-
-    return allSteps;
-  }, []);
-
-  const step = steps[currentStep];
-  const isFirst = currentStep === 0;
-  const isLast = currentStep === steps.length - 1;
-
-  // Dispara o evento para abrir/fechar o menu mobile dependendo do passo
-  useEffect(() => {
-    if (!open) return;
-
-    const isMobile = window.innerWidth < 768;
-    if (!isMobile) return;
-
-    const isSidebarStep = currentStep <= 8;
-
-    window.dispatchEvent(
-      new CustomEvent("sobral-tutorial-sidebar", {
-        detail: { open: isSidebarStep },
-      })
+    if (!open) return [];
+    return buildSteps(isMobile).filter(({ selector }) =>
+      elementIsVisible(document.querySelector(selector))
     );
-  }, [currentStep, open]);
+  }, [open, isMobile]);
+
+  const index = clamp(currentStep, 0, Math.max(steps.length - 1, 0));
+  const step = steps[index];
+  const isFirst = index === 0;
+  const isLast = index === steps.length - 1;
 
   const handleClose = useCallback(() => {
+    window.clearTimeout(changeTimerRef.current);
+    window.clearTimeout(unlockTimerRef.current);
     setCurrentStep(0);
     setTargetRect(null);
+    setContentVisible(true);
+    setIsChangingStep(false);
     onClose();
   }, [onClose]);
 
-  const goToPreviousStep = useCallback(() => {
-    setCurrentStep((previous) => Math.max(previous - 1, 0));
+  // Primeiro atenua o texto; depois atualiza o passo e revela o novo conteúdo.
+  // Os botões ficam temporariamente bloqueados para evitar saltos em cliques rápidos.
+  const moveStep = useCallback((direction) => {
+    if (isChangingStep || steps.length < 2) return;
+    const next = clamp(index + direction, 0, steps.length - 1);
+    if (next === index) return;
+
+    setIsChangingStep(true);
+    setContentVisible(false);
+    changeTimerRef.current = window.setTimeout(() => {
+      setCurrentStep(next);
+      setContentVisible(true);
+      unlockTimerRef.current = window.setTimeout(() => setIsChangingStep(false), STEP_LOCK_DURATION);
+    }, FADE_OUT_DURATION);
+  }, [index, isChangingStep, steps.length]);
+
+  const goToPreviousStep = useCallback(() => moveStep(-1), [moveStep]);
+  const goToNextStep = useCallback(() => moveStep(1), [moveStep]);
+
+  useEffect(() => () => {
+    window.clearTimeout(changeTimerRef.current);
+    window.clearTimeout(unlockTimerRef.current);
   }, []);
 
-  const goToNextStep = useCallback(() => {
-    setCurrentStep((previous) => Math.min(previous + 1, steps.length - 1));
-  }, [steps.length]);
-
-  // Controles do teclado
   useEffect(() => {
     if (!open) return undefined;
+    const handleResize = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, [open]);
 
+  useEffect(() => {
+    if (!open || !isMobile) return;
+    window.dispatchEvent(
+      new CustomEvent("sobral-tutorial-sidebar", { detail: { open: index <= 8 } })
+    );
+  }, [open, isMobile, index]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        handleClose();
-        return;
-      }
-      if (event.key === "ArrowRight") {
-        goToNextStep();
-        return;
-      }
-      if (event.key === "ArrowLeft") {
-        goToPreviousStep();
+      const focusedTag = document.activeElement?.tagName;
+      if (event.key === "Escape") handleClose();
+      else if (!["INPUT", "TEXTAREA", "SELECT"].includes(focusedTag)) {
+        if (event.key === "ArrowRight") goToNextStep();
+        if (event.key === "ArrowLeft") goToPreviousStep();
       }
     };
-
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [open, handleClose, goToNextStep, goToPreviousStep]);
 
   useLayoutEffect(() => {
     if (!open || !step) return undefined;
-
-    let animationFrameId = null;
-    let scrollTimeoutId = null;
-    let transitionTimeoutId = null;
-    let resizeObserver = null;
+    const timers = [];
+    let frameId = null;
+    let observer = null;
     let cancelled = false;
 
-    const measureTarget = () => {
+    const measure = () => {
+      if (cancelled) return;
       const element = document.querySelector(step.selector);
+      const rect = elementIsVisible(element) ? element.getBoundingClientRect() : null;
+      const nextRect = rect
+        ? { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom,
+            width: rect.width, height: rect.height }
+        : null;
+      setTargetRect((previous) => (sameRect(previous, nextRect) ? previous : nextRect));
 
-      if (!element || cancelled) return;
-
-      const rect = element.getBoundingClientRect();
-
-      setTargetRect({
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-        right: rect.right,
-        bottom: rect.bottom,
-      });
-    };
-
-    const scheduleMeasurement = () => {
-      if (animationFrameId !== null) {
-        window.cancelAnimationFrame(animationFrameId);
+      if (cardRef.current) {
+        const height = cardRef.current.getBoundingClientRect().height;
+        setCardHeight((previous) => (Math.abs(previous - height) > 1 ? height : previous));
       }
-      animationFrameId = window.requestAnimationFrame(() => {
-        measureTarget();
-      });
     };
 
-    const isMobile = window.innerWidth < 768;
-    const isSidebarStep = currentStep <= 8;
+    const scheduleMeasure = () => {
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(measure);
+    };
 
-    // Se no Mobile ele for transicionar entre um passo de dentro do Menu
-    // para um de fora, precisamos de uma pausa leve para o DOM redesenhar 
-    // o bloqueio escuro sumindo.
-    const waitTime = isMobile && !isSidebarStep ? 350 : 0;
+    const element = document.querySelector(step.selector);
+    if (element && step.scrollToTarget) {
+      element.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
 
-    transitionTimeoutId = setTimeout(() => {
-        if (cancelled) return;
+    // Mede novamente durante as transições da sidebar e do menu móvel.
+    scheduleMeasure();
+    for (const delay of [80, 180, 350, 550]) {
+      timers.push(window.setTimeout(scheduleMeasure, delay));
+    }
+    window.addEventListener("scroll", scheduleMeasure, true);
+    window.addEventListener("resize", scheduleMeasure);
 
-        const element = document.querySelector(step.selector);
-
-        if (element && !step.disableScroll) {
-            element.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-                inline: "center",
-            });
-
-            scheduleMeasurement();
-
-            scrollTimeoutId = window.setTimeout(() => {
-                scheduleMeasurement();
-            }, 350);
-        } else {
-            scheduleMeasurement();
-        }
-
-        const handleWindowChange = () => scheduleMeasurement();
-        window.addEventListener("resize", handleWindowChange);
-        window.addEventListener("scroll", handleWindowChange, true);
-
-        if (element && typeof ResizeObserver !== "undefined") {
-            resizeObserver = new ResizeObserver(() => scheduleMeasurement());
-            resizeObserver.observe(element);
-        }
-    }, waitTime);
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(scheduleMeasure);
+      if (element) observer.observe(element);
+      if (cardRef.current) observer.observe(cardRef.current);
+    }
 
     return () => {
       cancelled = true;
-
-      if (animationFrameId !== null) window.cancelAnimationFrame(animationFrameId);
-      if (scrollTimeoutId !== null) window.clearTimeout(scrollTimeoutId);
-      if (transitionTimeoutId !== null) clearTimeout(transitionTimeoutId);
-      if (resizeObserver) resizeObserver.disconnect();
-
-      window.removeEventListener("resize", () => scheduleMeasurement());
-      window.removeEventListener("scroll", () => scheduleMeasurement(), true);
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      timers.forEach((id) => window.clearTimeout(id));
+      window.removeEventListener("scroll", scheduleMeasure, true);
+      window.removeEventListener("resize", scheduleMeasure);
+      observer?.disconnect();
     };
-  }, [open, step, currentStep]);
+  }, [open, step]);
 
+  // O foco acompanha a caixa do tutorial, sem deslocar o mapa.
   useEffect(() => {
-    if (!open) return undefined;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [open]);
+    if (open && step) cardRef.current?.focus({ preventScroll: true });
+  }, [open, step]);
 
-  if (!open || !step) return null;
+  if (!open) return null;
 
-  const spotlightStyle = getSpotlightStyle(targetRect, step);
-  const cardStyle = getCardStyle(targetRect, step);
+  const highlight = getHighlightRect(targetRect, step?.spotlightPadding ?? 5, viewport);
+  const position = getCardPosition(highlight, step?.placement ?? "bottom", { height: cardHeight }, viewport);
 
-  return (
-    <div className="fixed inset-0 z-[99999] pointer-events-none">
-      {!targetRect && (
+  const contentMotionClass = `transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none ${
+    contentVisible ? "translate-y-0 opacity-100" : "translate-y-1.5 opacity-0"
+  }`;
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  const movingStyle = { transition: reducedMotion ? "none" : MOTION_TRANSITION };
+
+  const overlay = (
+    <div className="fixed inset-0 z-[99999]" style={{ width: "100vw", height: "100dvh" }}>
+      {highlight ? (
         <>
-          <div className="absolute inset-0 bg-slate-950/80" />
-          <button
-            type="button"
-            onClick={handleClose}
-            aria-label="Fechar tutorial"
-            className="absolute top-5 right-5 h-10 w-10 rounded-xl bg-white text-slate-700 shadow-xl pointer-events-auto flex items-center justify-center hover:bg-slate-100 transition"
-          >
-            <X size={19} />
-          </button>
+          {/* As quatro faces escurecidas acompanham o destaque com a mesma curva. */}
+          <div className="absolute bg-slate-950/75 motion-reduce:transition-none" style={{ ...movingStyle, top: 0, left: 0, right: 0, height: highlight.top }} />
+          <div className="absolute bg-slate-950/75 motion-reduce:transition-none" style={{ ...movingStyle, top: highlight.top, left: 0, width: highlight.left, height: highlight.height }} />
+          <div className="absolute bg-slate-950/75 motion-reduce:transition-none" style={{ ...movingStyle, top: highlight.top, left: highlight.right, right: 0, height: highlight.height }} />
+          <div className="absolute bg-slate-950/75 motion-reduce:transition-none" style={{ ...movingStyle, top: highlight.bottom, left: 0, right: 0, bottom: 0 }} />
+          <div
+            className="pointer-events-none absolute rounded-2xl border-[3px] border-amber-400 shadow-[0_0_0_2px_rgba(255,255,255,0.45)] motion-reduce:transition-none"
+            style={{ ...movingStyle, left: highlight.left, top: highlight.top, width: highlight.width, height: highlight.height }}
+          />
         </>
+      ) : (
+        <div className="absolute inset-0 bg-slate-950/75" />
       )}
 
-      {targetRect && (
-        <div
-          className="absolute rounded-3xl border-4 border-amber-400 bg-transparent shadow-[0_0_0_9999px_rgba(15,23,42,0.78)] transition-[top,left,width,height] duration-300 ease-out"
-          style={spotlightStyle}
-        />
-      )}
-
-      {targetRect && (
-        <div
-          className="absolute w-[360px] max-w-[calc(100vw-2rem)] bg-white rounded-3xl shadow-2xl border border-slate-200 pointer-events-auto overflow-hidden transition-[top,left] duration-300 ease-out"
-          style={cardStyle}
-        >
-          <div className="p-5 bg-gradient-to-r from-blue-700 to-blue-900 text-white">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
-                  <MousePointer2 size={21} />
-                </div>
-                <div>
-                  <p className="text-xs text-blue-100 font-bold">
-                    Passo {currentStep + 1} de {steps.length}
-                  </p>
-                  <h2 className="text-lg font-black">{step.title}</h2>
-                </div>
+      <div
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sobral-tour-title"
+        tabIndex={-1}
+        className="absolute overflow-y-auto rounded-3xl border border-blue-100 bg-white shadow-2xl outline-none motion-reduce:transition-none"
+        style={{
+          transition: reducedMotion ? "none" : `top ${MOVE_DURATION}ms ${MOTION_EASING}, left ${MOVE_DURATION}ms ${MOTION_EASING}`,
+          top: position.top,
+          left: position.left,
+          width: position.width,
+          maxHeight: Math.max(140, viewport.height - SCREEN_MARGIN * 2),
+        }}
+      >
+        <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-blue-950 p-5 text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+                <MousePointer2 size={21} aria-hidden="true" />
               </div>
-              <button
-                type="button"
-                onClick={handleClose}
-                aria-label="Fechar tutorial"
-                className="h-9 w-9 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center shrink-0"
-              >
-                <X size={18} />
-              </button>
+              <div className={`min-w-0 ${contentMotionClass}`}>
+                <p className="text-xs font-bold text-blue-100">
+                  Passo {steps.length ? index + 1 : 0} de {steps.length}
+                </p>
+                <h2 id="sobral-tour-title" className="text-lg font-black leading-snug">
+                  {step?.title || "Tutorial indisponível"}
+                </h2>
+              </div>
             </div>
-          </div>
-
-          <div className="p-5">
-            <p className="text-sm text-slate-600 leading-relaxed">{step.text}</p>
-            <div className="flex items-center gap-1 mt-5 flex-wrap">
-              {steps.map((tutorialStep, index) => (
-                <span
-                  key={`${tutorialStep.selector}-${index}`}
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    index === currentStep ? "w-8 bg-blue-700" : "w-2 bg-slate-200"
-                  }`}
-                />
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between gap-3 mt-6">
-              <button
-                type="button"
-                onClick={goToPreviousStep}
-                disabled={isFirst}
-                className="px-4 py-2.5 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-2"
-              >
-                <ArrowLeft size={16} />
-                Voltar
-              </button>
-
-              {isLast ? (
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="px-4 py-2.5 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 transition"
-                >
-                  Concluir
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={goToNextStep}
-                  className="px-4 py-2.5 rounded-2xl bg-blue-700 text-white font-bold hover:bg-blue-800 transition flex items-center gap-2"
-                >
-                  Próximo
-                  <ArrowRight size={16} />
-                </button>
-              )}
-            </div>
-
             <button
               type="button"
               onClick={handleClose}
-              className="mt-4 w-full text-xs font-bold text-slate-400 hover:text-slate-600 transition"
+              aria-label="Fechar tutorial"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 transition hover:bg-white/20"
             >
-              Pular tutorial
+              <X size={18} />
             </button>
           </div>
         </div>
-      )}
+
+        <div className="p-5">
+          <p className={`text-sm leading-7 text-slate-600 ${contentMotionClass}`}>
+            {step?.text || "Não foi possível localizar os controles nesta tela. Feche o tutorial e abra novamente com o mapa visível."}
+          </p>
+          {steps.length > 0 && (
+            <>
+              <div className="mt-5 flex flex-wrap items-center gap-1" aria-hidden="true">
+                {steps.map((item, itemIndex) => (
+                  <span
+                    key={item.selector}
+                    className={`h-2 rounded-full transition-all duration-500 ease-out motion-reduce:transition-none ${
+                      itemIndex === index ? "w-7 bg-blue-700" : "w-2 bg-blue-100"
+                    }`}
+                  />
+                ))}
+              </div>
+              <div className="mt-6 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={goToPreviousStep}
+                  disabled={isFirst || isChangingStep}
+                  className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-800 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ArrowLeft size={16} /> Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={isLast ? handleClose : goToNextStep}
+                  disabled={isChangingStep}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isLast ? "Concluir" : "Próximo"}
+                  {!isLast && <ArrowRight size={16} />}
+                </button>
+              </div>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={handleClose}
+            className="mt-4 w-full py-1 text-xs font-bold text-slate-500 transition hover:text-blue-700"
+          >
+            Pular tutorial
+          </button>
+        </div>
+      </div>
     </div>
   );
-}
 
-function getSpotlightStyle(rect, step = {}) {
-  if (!rect) return {};
-  const padding = step.spotlightPadding ?? 8;
-  const offsetX = step.spotlightOffsetX ?? 0;
-  const offsetY = step.spotlightOffsetY ?? 0;
-
-  return {
-    top: Math.max(rect.top - padding + offsetY, 8),
-    left: Math.max(rect.left - padding + offsetX, 8),
-    width: rect.width + padding * 2,
-    height: rect.height + padding * 2,
-  };
-}
-
-function getCardStyle(rect, step = {}) {
-  if (!rect) return { visibility: "hidden", pointerEvents: "none" };
-
-  const placement = step.placement || "right";
-  const cardWidth = 360;
-  const cardHeight = 300;
-  const margin = 14;
-  const cardOffsetX = step.cardOffsetX ?? 0;
-  const cardOffsetY = step.cardOffsetY ?? 0;
-  const windowWidth = window.innerWidth;
-  const windowHeight = window.innerHeight;
-
-  let top = rect.top;
-  let left = rect.right + margin;
-
-  if (placement === "left") {
-    left = rect.left - cardWidth - margin;
-    top = rect.top;
-  } else if (placement === "right") {
-    left = rect.right + margin;
-    top = rect.top;
-  } else if (placement === "bottom") {
-    left = rect.left;
-    top = rect.bottom + margin;
-  } else if (placement === "bottom-left") {
-    left = rect.right - cardWidth;
-    top = rect.bottom + margin;
-  } else if (placement === "top") {
-    left = rect.left;
-    top = rect.top - cardHeight - margin;
-  }
-
-  left += cardOffsetX;
-  top += cardOffsetY;
-
-  if (left + cardWidth > windowWidth - margin) {
-    left = windowWidth - cardWidth - margin;
-  }
-  if (left < margin) {
-    left = margin;
-  }
-  if (top + cardHeight > windowHeight - margin) {
-    top = windowHeight - cardHeight - margin;
-  }
-  if (top < margin) {
-    top = margin;
-  }
-
-  return { top, left };
+  // O portal impede que a sidebar ou outras camadas alterem o posicionamento fixo.
+  return createPortal(overlay, document.body);
 }

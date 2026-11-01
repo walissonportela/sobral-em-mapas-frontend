@@ -3,30 +3,61 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { GeoJSON, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import {
+  Ambulance,
   Baby,
+  Banknote,
   Bike,
   BookOpen,
   Building2,
   Bus,
+  BusFront,
+  Camera,
+  CarFront,
   Church,
+  Clapperboard,
+  Coffee,
   Cross,
+  Drama,
   Droplets,
   Dumbbell,
+  Factory,
   Flame,
   Flower2,
+  Footprints,
+  Fuel,
   GraduationCap,
+  HeartHandshake,
   HeartPulse,
   Hospital,
+  Hotel,
   Landmark,
+  Leaf,
   MapPin,
+  Microscope,
+  Mountain,
+  Music2,
+  Palette,
   ParkingCircle,
   Pill,
   Recycle,
+  Route,
   School,
   Shield,
   ShoppingCart,
+  Sprout,
+  Stethoscope,
+  Store,
+  TentTree,
+  Theater,
   Train,
+  TreePine,
   Trees,
+  Trophy,
+  UtensilsCrossed,
+  Volleyball,
+  Warehouse,
+  Waves,
+  WavesLadder,
 } from "lucide-react";
 
 // Suporta tanto arquivos antigos do frontend quanto uploads publicados pelo Laravel.
@@ -49,15 +80,23 @@ const DEFAULT_STYLE = {
 
 // Abaixo deste zoom, apenas as geometrias permanecem no mapa.
 // Evita ícones agrupados e rótulos gigantes quando o usuário afasta muito.
-// Zoom 10 ou maior restaura automaticamente os marcadores e os nomes elegíveis.
-const MIN_SYMBOL_ZOOM = 10;
+// Zoom 11 ou maior restaura automaticamente os marcadores e os nomes elegíveis.
+const MIN_SYMBOL_ZOOM = 12;
 
-function styleForFeature(feature, colorOverride = null) {
+function styleForFeature(feature, colorOverride = null, strokeWidthOverride = null) {
+  // A espessura escolhida na sidebar vale somente nesta visualização.
+  // Se não houver preferência, preserva a espessura original do GeoJSON.
+  const requestedWidth = strokeWidthOverride == null ? null : Number(strokeWidthOverride);
+  const temporaryWidth = requestedWidth !== null && Number.isFinite(requestedWidth)
+    ? Math.min(12, Math.max(1, requestedWidth))
+    : null;
   const saved = feature?.properties?.estilo;
   if (!saved || typeof saved !== "object") {
-    return colorOverride
-      ? { ...DEFAULT_STYLE, color: colorOverride, fillColor: colorOverride }
-      : DEFAULT_STYLE;
+    return {
+      ...DEFAULT_STYLE,
+      ...(colorOverride ? { color: colorOverride, fillColor: colorOverride } : {}),
+      ...(temporaryWidth !== null ? { weight: temporaryWidth } : {}),
+    };
   }
   const color = /^#[0-9a-f]{6}$/i.test(saved.cor || "") ? saved.cor : DEFAULT_STYLE.color;
   const width = Number(saved.espessura);
@@ -68,7 +107,7 @@ function styleForFeature(feature, colorOverride = null) {
     : "solid";
   return {
     color: colorOverride || color,
-    weight: Number.isFinite(width) ? Math.min(20, Math.max(1, width)) : 2,
+    weight: temporaryWidth ?? (Number.isFinite(width) ? Math.min(20, Math.max(1, width)) : 2),
     opacity: saved.opacidade_linha !== undefined && Number.isFinite(savedLineOpacity)
       ? Math.min(1, Math.max(0, savedLineOpacity))
       : 1,
@@ -86,29 +125,91 @@ function styleForFeature(feature, colorOverride = null) {
 // O cadastro da camada e os GeoJSONs não precisam ser alterados.
 
 const POINT_ICONS = {
+  // Educação e pesquisa
   school: { component: School, color: "#2563eb" },
   kindergarten: { component: Baby, color: "#0891b2" },
   university: { component: GraduationCap, color: "#7c3aed" },
+  college: { component: GraduationCap, color: "#6366f1" },
+  library: { component: BookOpen, color: "#1d4ed8" },
+  research: { component: Microscope, color: "#4338ca" },
+
+  // Saúde e atendimento
   hospital: { component: Hospital, color: "#dc2626" },
   health: { component: HeartPulse, color: "#e11d48" },
+  clinic: { component: Stethoscope, color: "#e11d48" },
+  dentist: { component: Stethoscope, color: "#db2777" },
   pharmacy: { component: Pill, color: "#be123c" },
-  park: { component: Trees, color: "#15803d" },
-  playground: { component: Flower2, color: "#16a34a" },
+  laboratory: { component: Microscope, color: "#c026d3" },
+  ambulance: { component: Ambulance, color: "#dc2626" },
+  firstAid: { component: Cross, color: "#dc2626" },
+
+  // Esporte, lazer e recreação
   sports: { component: Dumbbell, color: "#2563eb" },
+  sportsCentre: { component: Trophy, color: "#1d4ed8" },
+  sportsHall: { component: Volleyball, color: "#2563eb" },
+  pitch: { component: Volleyball, color: "#0284c7" },
+  stadium: { component: Trophy, color: "#1e40af" },
+  fitness: { component: Dumbbell, color: "#0d9488" },
+  swimming: { component: WavesLadder, color: "#0891b2" },
+  runningTrack: { component: Footprints, color: "#2563eb" },
+  playground: { component: Flower2, color: "#16a34a" },
+
+  // Meio ambiente, recursos naturais e saneamento
+  park: { component: Trees, color: "#15803d" },
+  garden: { component: Flower2, color: "#16a34a" },
+  natureReserve: { component: TreePine, color: "#166534" },
+  vegetation: { component: Leaf, color: "#22c55e" },
+  planting: { component: Sprout, color: "#65a30d" },
+  water: { component: Droplets, color: "#0284c7" },
+  river: { component: Waves, color: "#0369a1" },
+  recycling: { component: Recycle, color: "#16a34a" },
+
+  // Mobilidade e transporte
   bus: { component: Bus, color: "#d97706" },
+  busStation: { component: BusFront, color: "#ea580c" },
   bicycle: { component: Bike, color: "#0d9488" },
+  bicycleParking: { component: Bike, color: "#059669" },
   train: { component: Train, color: "#4f46e5" },
+  road: { component: Route, color: "#64748b" },
+  parking: { component: ParkingCircle, color: "#475569" },
+  fuel: { component: Fuel, color: "#b45309" },
+  vehicle: { component: CarFront, color: "#475569" },
+
+  // Cultura, patrimônio e turismo
   museum: { component: Landmark, color: "#9333ea" },
-  library: { component: BookOpen, color: "#2563eb" },
-  police: { component: Shield, color: "#475569" },
+  monument: { component: Landmark, color: "#7e22ce" },
+  historic: { component: Landmark, color: "#a16207" },
+  artGallery: { component: Palette, color: "#c026d3" },
+  theater: { component: Theater, color: "#7c3aed" },
+  cinema: { component: Clapperboard, color: "#9333ea" },
+  culturalCentre: { component: Drama, color: "#a21caf" },
+  music: { component: Music2, color: "#c026d3" },
+  attraction: { component: Camera, color: "#7c3aed" },
+  viewpoint: { component: Mountain, color: "#64748b" },
+  camping: { component: TentTree, color: "#15803d" },
+
+  // Segurança e serviços públicos
+  police: { component: Shield, color: "#334155" },
   fire: { component: Flame, color: "#ea580c" },
   government: { component: Building2, color: "#1d4ed8" },
-  shopping: { component: ShoppingCart, color: "#c026d3" },
+  courthouse: { component: Landmark, color: "#475569" },
+  community: { component: Building2, color: "#2563eb" },
+  socialAssistance: { component: HeartHandshake, color: "#0891b2" },
   worship: { component: Church, color: "#64748b" },
-  water: { component: Droplets, color: "#0284c7" },
-  recycling: { component: Recycle, color: "#16a34a" },
-  parking: { component: ParkingCircle, color: "#64748b" },
-  firstAid: { component: Cross, color: "#dc2626" },
+
+  // Comércio e serviços
+  shopping: { component: ShoppingCart, color: "#c026d3" },
+  market: { component: Store, color: "#d97706" },
+  restaurant: { component: UtensilsCrossed, color: "#ea580c" },
+  cafe: { component: Coffee, color: "#92400e" },
+  hotel: { component: Hotel, color: "#6366f1" },
+  bank: { component: Banknote, color: "#15803d" },
+
+  // Infraestrutura e indústria
+  industry: { component: Factory, color: "#475569" },
+  warehouse: { component: Warehouse, color: "#64748b" },
+
+  // Caso não haja categoria identificável
   default: { component: MapPin, color: "#2563eb" },
 };
 
@@ -121,63 +222,188 @@ const clusterIconCache = new Map();
 
 function getPointCategory(feature, layer) {
   const properties = feature?.properties || {};
-  const tags = properties.tags && typeof properties.tags === "object" ? properties.tags : {};
+  const tags = properties.tags && typeof properties.tags === "object" && !Array.isArray(properties.tags)
+    ? properties.tags : {};
+  // OSM pode exportar tags diretamente em properties ou dentro de properties.tags.
   const attr = (key) => String(properties[key] ?? tags[key] ?? "").toLowerCase().trim();
   const amenity = attr("amenity");
   const healthcare = attr("healthcare");
   const leisure = attr("leisure");
   const tourism = attr("tourism");
+  const historic = attr("historic");
+  const sport = attr("sport");
   const highway = attr("highway");
   const transport = attr("public_transport");
   const railway = attr("railway");
-  if (amenity === "kindergarten") return "kindergarten";
-  if (amenity === "school") return "school";
-  if (["college", "university"].includes(amenity)) return "university";
-  if (amenity === "hospital" || healthcare === "hospital") return "hospital";
-  if (["clinic", "doctors", "dentist", "health_centre"].includes(amenity) ||
-      ["clinic", "doctor", "dentist", "centre", "health_post"].includes(healthcare)) return "health";
-  if (amenity === "pharmacy" || healthcare === "pharmacy") return "pharmacy";
-  if (["park", "garden", "nature_reserve"].includes(leisure)) return "park";
-  if (leisure === "playground") return "playground";
-  if (["sports_centre", "sports_hall", "pitch", "stadium", "fitness_centre", "fitness_station", "track"].includes(leisure)) return "sports";
-  if (["bus_station"].includes(amenity) || highway === "bus_stop" || transport === "platform" && attr("bus") === "yes") return "bus";
-  if (["bicycle_parking", "bicycle_rental"].includes(amenity)) return "bicycle";
-  if (["station", "halt", "tram_stop"].includes(railway)) return "train";
-  if (tourism === "museum" || tourism === "attraction" && attr("historic")) return "museum";
+  const emergency = attr("emergency");
+  const shop = attr("shop");
+  const natural = attr("natural");
+  const waterway = attr("waterway");
+  const landuse = attr("landuse");
+  const building = attr("building");
+  const office = attr("office");
+
+  // 1. Atributos específicos: sempre prevalecem sobre o nome da camada.
+  // Educação
+  if (amenity === "kindergarten" || amenity === "childcare") return "kindergarten";
+  if (amenity === "school" || amenity === "music_school") return "school";
+  if (amenity === "university") return "university";
+  if (amenity === "college") return "college";
   if (amenity === "library") return "library";
+  if (["research_institute", "research", "laboratory"].includes(office)) return "research";
+
+  // Saúde (as categorias mais específicas vêm primeiro)
+  if (["ambulance_station", "ambulance"].includes(emergency)) return "ambulance";
+  if (amenity === "first_aid" || emergency === "first_aid") return "firstAid";
+  if (amenity === "hospital" || healthcare === "hospital") return "hospital";
+  if (amenity === "pharmacy" || healthcare === "pharmacy") return "pharmacy";
+  if (amenity === "dentist" || healthcare === "dentist") return "dentist";
+  if (healthcare === "laboratory" || amenity === "laboratory") return "laboratory";
+  if (["clinic", "doctors"].includes(amenity) || ["clinic", "doctor", "physiotherapist"].includes(healthcare)) return "clinic";
+  if (["health_centre", "doctors_office"].includes(amenity) || ["centre", "health_post", "nurse"].includes(healthcare)) return "health";
+
+  // Esporte e lazer: especializações antes de ícones genéricos.
+  if (leisure === "playground") return "playground";
+  if (leisure === "stadium") return "stadium";
+  if (leisure === "sports_hall") return "sportsHall";
+  if (leisure === "sports_centre") return "sportsCentre";
+  if (leisure === "pitch") return "pitch";
+  if (["fitness_centre", "fitness_station"].includes(leisure) || amenity === "gym") return "fitness";
+  if (leisure === "swimming_pool" || sport === "swimming") return "swimming";
+  if (leisure === "track" || ["running", "athletics"].includes(sport)) return "runningTrack";
+  if (leisure === "recreation_ground") return "sports";
+  if (sport) return "sports";
+
+  // Meio ambiente e água
+  if (leisure === "garden") return "garden";
+  if (leisure === "nature_reserve" || ["protected_area", "national_park"].includes(attr("boundary"))) return "natureReserve";
+  if (leisure === "park") return "park";
+  if (landuse === "forest" || natural === "wood") return "vegetation";
+  if (["allotments", "farmland", "orchard"].includes(landuse)) return "planting";
+  if (waterway || natural === "water" || natural === "wetland") return "river";
+  if (amenity === "drinking_water" || attr("man_made") === "water_works") return "water";
+  if (amenity === "recycling" || attr("recycling_type")) return "recycling";
+
+  // Mobilidade e transporte
+  if (amenity === "bus_station" || transport === "station" && attr("bus") === "yes") return "busStation";
+  if (highway === "bus_stop" || transport === "stop_position" && attr("bus") === "yes" ||
+      transport === "platform" && attr("bus") === "yes") return "bus";
+  if (amenity === "bicycle_parking") return "bicycleParking";
+  if (amenity === "bicycle_rental" || amenity === "bicycle_repair_station" || attr("bicycle") === "designated") return "bicycle";
+  if (["station", "halt", "tram_stop", "subway_entrance"].includes(railway)) return "train";
+  if (amenity === "parking") return "parking";
+  if (amenity === "fuel") return "fuel";
+  if (amenity === "car_rental" || amenity === "car_sharing") return "vehicle";
+  if (highway && ["motorway_junction", "services", "rest_area"].includes(highway)) return "road";
+
+  // Cultura, turismo e patrimônio histórico
+  if (tourism === "museum") return "museum";
+  if (["monument", "memorial", "wayside_cross"].includes(historic)) return "monument";
+  if (historic) return "historic";
+  if (tourism === "gallery" || tourism === "artwork") return "artGallery";
+  if (amenity === "theatre") return "theater";
+  if (amenity === "cinema") return "cinema";
+  if (amenity === "arts_centre" || amenity === "cultural_centre") return "culturalCentre";
+  if (amenity === "music_venue") return "music";
+  if (tourism === "viewpoint") return "viewpoint";
+  if (tourism === "camp_site" || tourism === "caravan_site") return "camping";
+  if (["hotel", "hostel", "guest_house", "motel", "apartment"].includes(tourism)) return "hotel";
+  if (tourism === "attraction" || tourism === "theme_park") return "attraction";
+
+  // Segurança, governo e serviços sociais
   if (amenity === "police") return "police";
   if (amenity === "fire_station") return "fire";
-  if (["townhall", "public_building", "courthouse"].includes(amenity)) return "government";
+  if (amenity === "courthouse") return "courthouse";
+  if (["townhall", "public_building"].includes(amenity) || office === "government") return "government";
+  if (["social_facility", "social_centre"].includes(amenity) || healthcare === "social_work") return "socialAssistance";
+  if (amenity === "community_centre") return "community";
   if (amenity === "place_of_worship") return "worship";
-  if (amenity === "drinking_water") return "water";
-  if (amenity === "recycling") return "recycling";
-  if (amenity === "parking") return "parking";
-  if (attr("shop")) return "shopping";
-  if (amenity === "first_aid") return "firstAid";
-  // Para arquivos GeoJSON próprios que não possuem tags do OpenStreetMap,
-  // considera também a descrição da camada/subcategoria.
-  const hint = [
-    layer?.name,
-    layer?.subcategory?.name,
-    layer?.subcategory?.category?.name,
-    attr("categoria"),
-    attr("tipo"),
+
+  // Comércio e serviços
+  if (amenity === "restaurant" || amenity === "fast_food" || amenity === "food_court") return "restaurant";
+  if (amenity === "cafe" || amenity === "ice_cream") return "cafe";
+  if (amenity === "bank" || amenity === "atm") return "bank";
+  if (amenity === "marketplace" || ["supermarket", "convenience", "bakery", "greengrocer"].includes(shop)) return "market";
+  if (shop) return "shopping";
+
+  // Infraestrutura
+  if (landuse === "industrial" || ["industrial", "factory"].includes(building) || office === "company") return "industry";
+  if (building === "warehouse" || landuse === "depot") return "warehouse";
+
+  // 2. GeoJSON sem tags OSM: nomes e campos descritivos da própria feição.
+  // Se não encontrar uma especialização, utiliza o nome da camada/subcategoria.
+  const featureHint = [
+    attr("tipo"), attr("categoria"), attr("name"), attr("nome"), attr("title"),
+    attr("description"), attr("descricao"),
+  ].filter(Boolean).join(" ");
+  const layerHint = [
+    layer?.name, layer?.subcategory?.name, layer?.subcategory?.category?.name,
   ].filter(Boolean).join(" ").toLowerCase();
-  if (/esport|quadra|gin[aá]sio|academia|arena/.test(hint)) return "sports";
-  if (/infantil|creche/.test(hint)) return "kindergarten";
-  if (/universid|faculdade|ensino superior/.test(hint)) return "university";
-  if (/escola|educa|ensino/.test(hint)) return "school";
-  if (/farm[aá]c/.test(hint)) return "pharmacy";
-  if (/hospital/.test(hint)) return "hospital";
-  if (/sa[uú]de|cl[ií]nica|posto de sa[uú]de|ubs/.test(hint)) return "health";
-  if (/parque|pra[cç]a|[aá]rea verde/.test(hint)) return "park";
-  if (/biblioteca/.test(hint)) return "library";
-  if (/museu|patrim[oô]nio|cultur/.test(hint)) return "museum";
-  if (/ônibus|onibus|transporte p[uú]blico|parada/.test(hint)) return "bus";
-  if (/ciclovia|bicicleta/.test(hint)) return "bicycle";
-  if (/pol[ií]cia|seguran[cç]a/.test(hint)) return "police";
-  if (/hidr|[aá]gua/.test(hint)) return "water";
-  return "default";
+
+  const categoryFromHint = (hint) => {
+    if (!hint) return null;
+    if (/creche|educa[cç][aã]o infantil|pr[eé][ -]?escola/.test(hint)) return "kindergarten";
+    if (/universid|ensino superior/.test(hint)) return "university";
+    if (/faculdade|centro universit[aá]rio/.test(hint)) return "college";
+    if (/biblioteca/.test(hint)) return "library";
+    if (/escola|col[eé]gio|educa[cç][aã]o|institui[cç][aã]o de ensino/.test(hint)) return "school";
+    if (/odontolog|dentista/.test(hint)) return "dentist";
+    if (/laborat[oó]rio|exames cl[ií]nicos/.test(hint)) return "laboratory";
+    if (/farm[aá]cia/.test(hint)) return "pharmacy";
+    if (/hospital/.test(hint)) return "hospital";
+    if (/cl[ií]nica|consult[oó]rio/.test(hint)) return "clinic";
+    if (/ubs|posto de sa[uú]de|unidade b[aá]sica|csf|centro de sa[uú]de/.test(hint)) return "health";
+    if (/amb[uú]l[aâ]ncia|samu/.test(hint)) return "ambulance";
+    if (/primeiros socorros/.test(hint)) return "firstAid";
+    if (/est[aá]dio/.test(hint)) return "stadium";
+    if (/piscina|nata[cç][aã]o/.test(hint)) return "swimming";
+    if (/gin[aá]sio|quadra coberta/.test(hint)) return "sportsHall";
+    if (/quadra|campo de futebol|campo esportivo/.test(hint)) return "pitch";
+    if (/academia|muscula[cç][aã]o/.test(hint)) return "fitness";
+    if (/pista de corrida|atletismo/.test(hint)) return "runningTrack";
+    if (/centro esportivo|complexo esportivo|esport|arena/.test(hint)) return "sportsCentre";
+    if (/playground|parque infantil/.test(hint)) return "playground";
+    if (/reserva|[aá]rea de prote[cç][aã]o/.test(hint)) return "natureReserve";
+    if (/jardim/.test(hint)) return "garden";
+    if (/parque|pra[cç]a|[aá]rea verde/.test(hint)) return "park";
+    if (/\brio\b|\blago\b|a[cç]ude|lagoa/.test(hint)) return "river";
+    if (/[aá]gua|hidr[aá]ulic/.test(hint)) return "water";
+    if (/reciclagem|ecoponto/.test(hint)) return "recycling";
+    if (/rodovi[aá]ria|terminal de [oô]nibus/.test(hint)) return "busStation";
+    if (/[oô]nibus|parada de [oô]nibus|transporte p[uú]blico/.test(hint)) return "bus";
+    if (/biciclet[aá]rio/.test(hint)) return "bicycleParking";
+    if (/ciclovia|bicicleta|ciclofaixa/.test(hint)) return "bicycle";
+    if (/ferrovia|esta[cç][aã]o ferrovi[aá]ria|trem/.test(hint)) return "train";
+    if (/estacionamento/.test(hint)) return "parking";
+    if (/posto de combust[ií]vel/.test(hint)) return "fuel";
+    if (/sistema vi[aá]rio|malha vi[aá]ria|rodovia/.test(hint)) return "road";
+    if (/museu/.test(hint)) return "museum";
+    if (/monumento|memorial/.test(hint)) return "monument";
+    if (/patrim[oô]nio|hist[oó]ric/.test(hint)) return "historic";
+    if (/galeria de arte|artes visuais/.test(hint)) return "artGallery";
+    if (/teatro/.test(hint)) return "theater";
+    if (/cinema/.test(hint)) return "cinema";
+    if (/centro cultural|equipamento cultural/.test(hint)) return "culturalCentre";
+    if (/turismo|atra[cç][aã]o tur[ií]stica/.test(hint)) return "attraction";
+    if (/pousada|hotel|hospedagem/.test(hint)) return "hotel";
+    if (/delegacia|pol[ií]cia|seguran[cç]a p[uú]blica/.test(hint)) return "police";
+    if (/bombeiro/.test(hint)) return "fire";
+    if (/f[oó]rum|tribunal|justi[cç]a/.test(hint)) return "courthouse";
+    if (/prefeitura|secretaria municipal|[oó]rg[aã]o p[uú]blico/.test(hint)) return "government";
+    if (/assist[eê]ncia social|cras|creas/.test(hint)) return "socialAssistance";
+    if (/centro comunit[aá]rio/.test(hint)) return "community";
+    if (/igreja|templo|religioso/.test(hint)) return "worship";
+    if (/restaurante|lanchonete/.test(hint)) return "restaurant";
+    if (/caf[eé]|cafeteria/.test(hint)) return "cafe";
+    if (/mercado|feira|supermercado/.test(hint)) return "market";
+    if (/com[eé]rcio|loja|shopping/.test(hint)) return "shopping";
+    if (/\bbanco\b|caixa eletr[oô]nico/.test(hint) && !/atl[eé]tica|esportiv/.test(hint)) return "bank";
+    if (/ind[uú]stria|f[aá]brica/.test(hint)) return "industry";
+    if (/dep[oó]sito|galp[aã]o|armaz[eé]m/.test(hint)) return "warehouse";
+    return null;
+  };
+
+  return categoryFromHint(featureHint) || categoryFromHint(layerHint) || "default";
 }
 
 function getMarkerIcon(category, savedStyle, colorOverride = null) {
@@ -962,7 +1188,12 @@ export default function LocalGeoJSONLayer({ layer, viewSettings = {} }) {
     ? viewSettings.labelMode : "auto";
   const colorOverride = /^#[0-9a-f]{6}$/i.test(viewSettings?.color || "")
     ? viewSettings.color : null;
+  const requestedStrokeWidth = viewSettings?.strokeWidth == null
+    ? null : Number(viewSettings.strokeWidth);
+  const strokeWidthOverride = requestedStrokeWidth !== null && Number.isFinite(requestedStrokeWidth)
+    ? Math.min(12, Math.max(1, requestedStrokeWidth)) : null;
   const geojson = loaded?.path === path ? loaded.data : null;
+  const geoJSONRef = useRef(null);
 
   const separated = useMemo(() => (geojson ? separateGeoJSON(geojson) : null), [geojson]);
   const polygonMarkers = useMemo(
@@ -1017,14 +1248,24 @@ export default function LocalGeoJSONLayer({ layer, viewSettings = {} }) {
     return () => controller.abort();
   }, [path, layer.name]);
 
+  // Atualiza linhas e contornos existentes sem remontar milhares de feições
+  // ao movimentar o controle de espessura. Mantém popups e medições intactos.
+  useEffect(() => {
+    if (!geoJSONRef.current) return;
+    geoJSONRef.current.setStyle((feature) =>
+      styleForFeature(feature, colorOverride, strokeWidthOverride)
+    );
+  }, [geojson, colorOverride, strokeWidthOverride]);
+
   if (!geojson || !separated) return null;
   return (
     <>
       {separated.shapes.features.length > 0 && (
         <GeoJSON
+          ref={geoJSONRef}
           key={`${mode}-${colorOverride || "original"}-${showDetails}-${areaNames}-${otherNames}`}
           data={separated.shapes}
-          style={(feature) => styleForFeature(feature, colorOverride)}
+          style={(feature) => styleForFeature(feature, colorOverride, strokeWidthOverride)}
           onEachFeature={(feature, leafletLayer) => {
             const properties = feature.properties || {};
             const name = properties.nome || properties.name || properties.title;
