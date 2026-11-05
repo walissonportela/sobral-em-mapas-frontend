@@ -1,9 +1,23 @@
 import { useState, useRef } from "react";
 import { useMap } from "react-leaflet";
-import { Locate, Layers, Plus, Minus, Info, X } from "lucide-react";
+import {
+  Locate,
+  Layers,
+  Plus,
+  Minus,
+  Info,
+  X,
+  Navigation2,
+} from "lucide-react";
 import L from "leaflet";
 
-export default function MapControls({ onLayerChange, currentLayer }) {
+export default function MapControls({
+  onLayerChange,
+  currentLayer,
+  municipalBoundaryVisible = true,
+  municipalBoundaryAvailable = false,
+  onToggleMunicipalBoundary,
+}) {
   const map = useMap();
   const [showLegend, setShowLegend] = useState(false);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
@@ -70,11 +84,21 @@ export default function MapControls({ onLayerChange, currentLayer }) {
   };
 
   return (
-    <div 
-      data-tour="map-controls" 
+    <div
+      data-tour="map-controls"
       data-map-export-ignore="true"
       className="absolute top-4 right-4 z-[1000] flex flex-col gap-2"
+    >
+      {/* Indicador fixo do norte: o mapa não possui rotação */}
+      <div
+        aria-label="Norte geográfico"
+        role="img"
+        className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl border border-slate-200 bg-white shadow-lg pointer-events-none"
       >
+        <Navigation2 size={23} strokeWidth={1.8} className="text-slate-800" />
+        <span className="text-[9px] font-bold leading-none text-slate-600">N</span>
+      </div>
+
       <div className="flex flex-col rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white">
         <button className="h-11 w-11 flex items-center justify-center border-b border-slate-100 hover:bg-blue-50 transition" onClick={() => map.zoomIn()} title="Zoom +"><Plus size={20}/></button>
         <button className="h-11 w-11 flex items-center justify-center hover:bg-blue-50 transition" onClick={() => map.zoomOut()} title="Zoom -"><Minus size={20}/></button>
@@ -85,104 +109,99 @@ export default function MapControls({ onLayerChange, currentLayer }) {
         <button className="h-11 w-11 flex items-center justify-center border-b border-slate-100 hover:bg-blue-50 transition" onClick={() => { setShowLayerMenu(!showLayerMenu); setShowLegend(false); }} title="Camadas"><Layers size={20} className={showLayerMenu ? "text-blue-600" : "text-slate-600"} /></button>
         <button className="h-11 w-11 flex items-center justify-center hover:bg-blue-50 transition" onClick={() => { setShowLegend(!showLegend); setShowLayerMenu(false); }} title="Legenda"><Info size={20} className={showLegend ? 'text-blue-600' : 'text-slate-600'} /></button>
         
-       {showLayerMenu && (
-          <div className="absolute top-11 right-14 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-[2000]">
+        {showLayerMenu && (
+          <div
+            className="absolute top-0 right-14 z-[2000] w-56 max-w-[calc(100vw-88px)] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
+            style={{ maxHeight: "min(420px, calc(100dvh - 240px))" }}
+            onWheel={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+          >
+            <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              Mapas-base
+            </p>
+
             {[
               {
                 id: "osm",
                 label: "Mapa Padrão",
-                preview:
-                  "bg-gradient-to-br from-green-200 via-yellow-100 to-blue-200",
+                preview: "bg-gradient-to-br from-green-200 via-yellow-100 to-blue-200",
+              },
+              {
+                id: "light",
+                label: "Claro",
+                preview: "bg-gradient-to-br from-white via-slate-100 to-sky-100",
+              },
+              {
+                id: "darkContrast",
+                label: "Escuro",
+                preview: "bg-gradient-to-br from-slate-950 via-slate-600 to-slate-300",
               },
               {
                 id: "satellite",
                 label: "Satélite",
-                preview:
-                  "bg-gradient-to-br from-green-900 via-green-700 to-stone-500",
+                preview: "bg-gradient-to-br from-green-900 via-green-700 to-stone-500",
               },
               {
                 id: "topographic",
                 label: "Relevo",
-                preview:
-                  "bg-gradient-to-br from-green-300 via-yellow-300 to-stone-400",
+                preview: "bg-gradient-to-br from-green-300 via-yellow-300 to-stone-400",
               },
             ].map((layer) => (
               <button
                 key={layer.id}
+                type="button"
                 onClick={() => {
                   onLayerChange(layer.id);
                   setShowLayerMenu(false);
                 }}
-                className={`
-                  w-full
-                  flex
-                  items-center
-                  gap-3
-                  px-3
-                  py-2
-                  rounded-xl
-                  transition
-                  ${
-                    currentLayer === layer.id
-                      ? "bg-blue-50 text-blue-700"
-                      : "hover:bg-slate-50"
-                  }
-                `}
+                aria-pressed={currentLayer === layer.id}
+                className={`flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors ${
+                  currentLayer === layer.id
+                    ? "bg-blue-50 text-blue-700"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
               >
                 <div
-                  className={`
-                    w-10
-                    h-10
-                    rounded-lg
-                    border
-                    border-slate-300
-                    overflow-hidden
-                    relative
-                    ${layer.preview}
-                  `}
-                >
-                  {layer.id === "osm" && (
-                    <>
-                      <div className="absolute left-0 top-4 w-full h-[2px] bg-white/80 rotate-12"></div>
-                      <div className="absolute left-3 top-0 w-[2px] h-full bg-white/70 -rotate-12"></div>
-                    </>
-                  )}
-
-                  {layer.id === "satellite" && (
-                    <>
-                      <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_20%_30%,white_2px,transparent_3px)] bg-[length:12px_12px]"></div>
-                    </>
-                  )}
-
-                  {layer.id === "topographic" && (
-                    <>
-                      <div className="absolute inset-0 opacity-40 bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,#8b5e3c_5px,#8b5e3c_6px)]"></div>
-                    </>
-                  )}
-                </div>
-
-                <div className="flex flex-col items-start">
-                  <span className="text-sm font-medium">
-                    {layer.label}
-                  </span>
-
-                  <span className="text-[11px] text-slate-400">
-                    {layer.id === "osm" &&
-                      "Ruas e cidades"}
-
-                    {layer.id === "satellite" &&
-                      "Imagem aérea"}
-
-                    {layer.id === "topographic" &&
-                      "Curvas de nível"}
-                  </span>
-                </div>
+                  className={`h-8 w-8 shrink-0 rounded-md border border-slate-200 ${layer.preview}`}
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                  {layer.label}
+                </span>
+                {currentLayer === layer.id && (
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-blue-600" aria-hidden="true" />
+                )}
               </button>
             ))}
+
+            {/* As opções abaixo usam as camadas já cadastradas na Sidebar. */}
+            <div className="mt-2 border-t border-slate-100 px-1 pt-2 pb-1">
+              <p className="mb-1 px-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                Limites territoriais
+              </p>
+
+              <label
+                className={`flex min-h-8 items-center gap-2 rounded-md px-1 py-1 text-xs ${
+                  municipalBoundaryAvailable
+                    ? "cursor-pointer text-slate-700 hover:bg-slate-50"
+                    : "cursor-not-allowed text-slate-400"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 shrink-0 accent-blue-600"
+                  checked={municipalBoundaryVisible && municipalBoundaryAvailable}
+                  disabled={!municipalBoundaryAvailable}
+                  onChange={() => onToggleMunicipalBoundary?.()}
+                />
+                <span className="leading-tight">Limite municipal de Sobral</span>
+              </label>
+
+            </div>
           </div>
         )}
 
-       {showLegend && (
+        {showLegend && (
           <div className="absolute top-0 right-14 w-[320px] bg-white rounded-2xl shadow-xl border border-slate-200 z-[2000]">
             <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50">
               <h3 className="text-sm font-bold text-slate-700">
@@ -288,15 +307,6 @@ export default function MapControls({ onLayerChange, currentLayer }) {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function LegendSection({ title, children }) {
-  return (
-    <div>
-      <p className="text-[10px] font-black uppercase text-slate-400 mb-2">{title}</p>
-      <div className="space-y-2">{children}</div>
     </div>
   );
 }

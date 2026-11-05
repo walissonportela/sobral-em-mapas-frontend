@@ -248,6 +248,21 @@ export default function Sidebar({
     mapToolsRef?.current?.clearDrawings?.();
   };
 
+  // Solicita ao Leaflet o enquadramento de uma camada GeoJSON já ativada.
+  // Não modifica a lista de camadas nem os arquivos armazenados.
+  const handleZoomToLayer = (layer) => {
+    if (!layer || layer.source_format !== "GEOJSON") return;
+
+    window.dispatchEvent(
+      new CustomEvent("sobral-map-zoom-to-layer", {
+        detail: { layerId: String(layer.id) },
+      })
+    );
+
+    // No celular a Sidebar ocupa a maior parte da tela.
+    if (window.innerWidth < 768) setIsOpen(false);
+  };
+
   const getCategoryIcon = (category) => {
     const name = category.toLowerCase();
 
@@ -787,27 +802,41 @@ export default function Sidebar({
                           </span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onToggleLayer(layer)
-                          }
-                          className="
-                            h-7
-                            w-7
-                            rounded-full
-                            flex
-                            items-center
-                            justify-center
-                            text-gray-400
-                            hover:bg-red-50
-                            hover:text-red-600
-                            transition-all
-                            shrink-0
-                          "
-                        >
-                          <X size={14} />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {layer.source_format === "GEOJSON" && (
+                            <button
+                              type="button"
+                              onClick={() => handleZoomToLayer(layer)}
+                              title={`Localizar ${layer.name} no mapa`}
+                              aria-label={`Enquadrar a camada ${layer.name} no mapa`}
+                              className="h-7 w-7 rounded-lg flex items-center justify-center text-blue-700 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 transition"
+                            >
+                              <MapPinned size={15} />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => onToggleLayer(layer)}
+                            title={`Remover ${layer.name} do mapa`}
+                            aria-label={`Remover ${layer.name} do mapa`}
+                            className="
+                              h-7
+                              w-7
+                              rounded-full
+                              flex
+                              items-center
+                              justify-center
+                              text-gray-400
+                              hover:bg-red-50
+                              hover:text-red-600
+                              transition-all
+                              shrink-0
+                            "
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -822,6 +851,7 @@ export default function Sidebar({
             activeLayers={activeLayers}
             layerViewSettings={layerViewSettings}
             onLayerViewSettingsChange={onLayerViewSettingsChange}
+            onZoomToLayer={handleZoomToLayer}
           />
         )}
 
@@ -1275,6 +1305,7 @@ function LegendPanel({
   activeLayers = [],
   layerViewSettings = {},
   onLayerViewSettingsChange,
+  onZoomToLayer,
 }) {
   const [hiddenLayerIds, setHiddenLayerIds] =
     useState([]);
@@ -1330,6 +1361,7 @@ function LegendPanel({
                 layer={layer}
                 visualSettings={layerViewSettings[String(layer.id)]}
                 onChangeSettings={(changes) => onLayerViewSettingsChange?.(layer.id, changes)}
+                onZoomToLayer={() => onZoomToLayer?.(layer)}
                 onHide={() => handleHideLegend(layer.id)}
               />
             ))}
@@ -1351,7 +1383,7 @@ function LegendPanel({
 }
 
 
-function LegendCard({ layer, onHide, visualSettings = {}, onChangeSettings }) {
+function LegendCard({ layer, onHide, visualSettings = {}, onChangeSettings, onZoomToLayer }) {
   const [legendError, setLegendError] =
     useState(false);
 
@@ -1406,6 +1438,18 @@ function LegendCard({ layer, onHide, visualSettings = {}, onChangeSettings }) {
 
       {/* Conteúdo */}
       <div className="p-4 space-y-3">
+
+        {isGeoJSON && (
+          <button
+            type="button"
+            onClick={onZoomToLayer}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition hover:bg-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+            title={`Enquadrar a camada ${layer.name} no mapa`}
+          >
+            <MapPinned size={15} />
+            Localizar no mapa
+          </button>
+        )}
 
         {description ? (
           <p className="text-sm text-slate-600 leading-relaxed">
@@ -1532,6 +1576,58 @@ function LegendCard({ layer, onHide, visualSettings = {}, onChangeSettings }) {
                   className="mt-2 text-xs font-semibold text-blue-700 hover:underline"
                 >
                   Restaurar espessura original
+                </button>
+              )}
+            </div>
+
+            {/* Controle temporário de opacidade: não altera o GeoJSON salvo. */}
+            <div className="border-t border-blue-100 pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor={`opacidade-preenchimento-${layer.id}`}
+                  className="text-xs font-semibold text-slate-700"
+                >
+                  Opacidade do preenchimento
+                </label>
+                <span className="shrink-0 rounded-lg border border-blue-100 bg-white px-2 py-1 text-[11px] font-bold text-blue-800">
+                  {visualSettings?.fillOpacity == null
+                    ? "Original"
+                    : `${Math.round(visualSettings.fillOpacity * 100)}%`}
+                </span>
+              </div>
+
+              <input
+                id={`opacidade-preenchimento-${layer.id}`}
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={Math.round((visualSettings?.fillOpacity ?? 0.12) * 100)}
+                onChange={(event) =>
+                  onChangeSettings?.({
+                    fillOpacity: Number(event.target.value) / 100,
+                  })
+                }
+                className="mt-3 w-full cursor-pointer accent-blue-700"
+                aria-label={`Opacidade do preenchimento da camada ${layer.name}`}
+              />
+
+              <div className="flex justify-between text-[10px] text-slate-500">
+                <span>0% · Transparente</span>
+                <span>100% · Opaco</span>
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                Altera somente o interior dos polígonos, sem afetar linhas,
+                contornos, ícones ou os arquivos GeoJSON.
+              </p>
+
+              {visualSettings?.fillOpacity != null && (
+                <button
+                  type="button"
+                  onClick={() => onChangeSettings?.({ fillOpacity: null })}
+                  className="mt-2 text-xs font-semibold text-blue-700 hover:underline"
+                >
+                  Restaurar preenchimento original
                 </button>
               )}
             </div>

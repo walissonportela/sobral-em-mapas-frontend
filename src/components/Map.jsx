@@ -4,8 +4,12 @@ import {
   GeoJSON,
   WMSTileLayer,
   useMap,
+  useMapEvents,
+  ScaleControl,
   Pane,
 } from "react-leaflet";
+
+import { Crosshair, ChevronDown, Copy, Check } from "lucide-react";
 
 import L from "leaflet";
 import domtoimage from "dom-to-image-more";
@@ -32,15 +36,56 @@ const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
   "http://localhost:8080/api";
 
+// Chave pública dos mapas-base da CARTO (configurada no .env.local do Vite).
+const CARTO_BASEMAP_KEY = (import.meta.env.VITE_CARTO_BASEMAP_KEY || "").trim();
+
 export default function Map({
   activeLayers = [],
   layerViewSettings = {},
+  availableLayers = [],
+  onToggleLayer,
   searchLocation,
   mapToolsRef,
 }) {
 
   const [sobralGeoJson, setSobralGeoJson] =
     useState(null);
+  const [showMunicipalBoundary, setShowMunicipalBoundary] = useState(true);
+
+  // Reaproveita o mesmo cadastro de camadas exibido na Sidebar.
+  // Somente GeoJSONs existentes entram no controle territorial.
+  const referenceLayers = useMemo(() => {
+    const normalize = (value) => String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+
+    const candidates = availableLayers.filter((layer) =>
+      String(layer.source_format || "").toUpperCase() === "GEOJSON" &&
+      Boolean(layer.geojson_path)
+    );
+
+    const findLayer = (exactName, categoryKeyword, nameKeyword) =>
+      candidates.find((layer) => normalize(layer.name) === exactName) ||
+      candidates.find((layer) =>
+        normalize(layer.subcategory?.name).includes(categoryKeyword) &&
+        normalize(layer.name).includes(nameKeyword)
+      ) || null;
+
+    return [
+      {
+        id: "bairros",
+        label: "Limite dos bairros",
+        layer: findLayer("bairros de sobral", "bairro", "bairro"),
+      },
+      {
+        id: "distritos",
+        label: "Limite dos distritos",
+        layer: findLayer("divisao de distritos", "distrito", "distrito"),
+      },
+    ];
+  }, [availableLayers]);
 
   const [printMode, setPrintMode] =
     useState(false);
@@ -59,16 +104,35 @@ export default function Map({
       height: 360,
     });
 
-  const [layerUrl, setLayerUrl] = useState("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
+  const [layerUrl, setLayerUrl] = useState(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+  );
   const [layerType, setLayerType] = useState("osm");
 
   const handleLayerChange = (type) => {
-    setLayerType(type);
     const urls = {
       osm: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      topographic: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+      light: CARTO_BASEMAP_KEY
+        ? `https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?key=${encodeURIComponent(CARTO_BASEMAP_KEY)}`
+        : null,
+      dark: CARTO_BASEMAP_KEY
+        ? `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${encodeURIComponent(CARTO_BASEMAP_KEY)}`
+        : null,
+      darkContrast: CARTO_BASEMAP_KEY
+        ? `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${encodeURIComponent(CARTO_BASEMAP_KEY)}`
+        : null,
+      satellite:
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      topographic:
+        "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
     };
+
+    if (!urls[type]) {
+      console.warn("Fonte de mapa indisponível. Confira VITE_CARTO_BASEMAP_KEY no .env.local.");
+      return;
+    }
+
+    setLayerType(type);
     setLayerUrl(urls[type]);
   };
 
@@ -304,6 +368,13 @@ export default function Map({
       ref={mapShellRef}
       className="absolute inset-0 z-0"
     >
+      {/* O contraste modifica somente os tiles do mapa-base.
+          Camadas GeoJSON, WMS, marcadores e limite municipal não recebem o filtro. */}
+      <style>{`
+        .leaflet-layer.sobral-dark-contrast {
+          filter: brightness(1.65) contrast(1.15) saturate(1.1);
+        }
+      `}</style>
       <MapContainer
         center={position}
         zoom={14}
@@ -318,19 +389,42 @@ export default function Map({
           printTools={printTools}
         />
 
-        <MapControls 
-          onLayerChange={handleLayerChange} 
-          currentLayer={layerType} 
+        <MapControls
+          onLayerChange={handleLayerChange}
+          currentLayer={layerType}
+          activeLayers={activeLayers}
+          referenceLayers={referenceLayers}
+          onToggleReferenceLayer={onToggleLayer}
+          municipalBoundaryVisible={showMunicipalBoundary}
+          municipalBoundaryAvailable={Boolean(sobralGeoJson)}
+          onToggleMunicipalBoundary={() => setShowMunicipalBoundary((visible) => !visible)}
         />
+
+        {/* Escala gráfica dinâmica, em metros e quilômetros */}
+        <ScaleControl
+          position="bottomright"
+          metric={true}
+          imperial={false}
+          maxWidth={120}
+        />
+
+        {/* Coordenadas do cursor ou do ponto tocado no mapa */}
+        <MapCoordinatesDisplay />
 
         <Pane name="base-map" style={{ zIndex: 200 }}>
           <TileLayer
+            key={layerType}
             url={layerUrl}
+            className={layerType === "darkContrast" ? "sobral-dark-contrast" : ""}
             crossOrigin="anonymous"
             attribution={
-              layerType === "osm"
-                ? "&copy; OpenStreetMap"
-                : "Esri, Maxar"
+              layerType === "light" || layerType === "dark" || layerType === "darkContrast"
+                ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attribution/">CARTO</a>'
+                : layerType === "osm"
+                  ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  : layerType === "topographic"
+                    ? '&copy; <a href="https://opentopomap.org/">OpenTopoMap</a>, OpenStreetMap contributors, SRTM'
+                    : 'Tiles &copy; Esri, Maxar'
             }
           />
         </Pane>
@@ -356,7 +450,7 @@ export default function Map({
           ))}
         </Pane>
 
-        {sobralGeoJson && (
+        {showMunicipalBoundary && sobralGeoJson && (
           <GeoJSON
             data={sobralGeoJson}
             style={{
@@ -394,6 +488,129 @@ export default function Map({
           isExporting={isExporting}
           containerRef={mapShellRef}
         />
+      )}
+    </div>
+  );
+}
+
+// Mostra latitude e longitude em WGS 84, com painel compacto e recolhível.
+// Em telas pequenas, o painel começa recolhido para ocupar menos espaço no mapa.
+function MapCoordinatesDisplay() {
+  const [coordinates, setCoordinates] = useState(null);
+  const [copyStatus, setCopyStatus] = useState("");
+  const [expanded, setExpanded] = useState(() =>
+    typeof window === "undefined"
+      ? true
+      : window.matchMedia("(min-width: 640px)").matches
+  );
+
+  useMapEvents({
+    mousemove(event) {
+      setCoordinates({
+        latitude: event.latlng.lat.toFixed(5),
+        longitude: event.latlng.lng.toFixed(5),
+      });
+      setCopyStatus("");
+    },
+    click(event) {
+      // No celular, um toque no mapa também atualiza as coordenadas.
+      setCoordinates({
+        latitude: event.latlng.lat.toFixed(5),
+        longitude: event.latlng.lng.toFixed(5),
+      });
+      setCopyStatus("");
+    },
+  });
+
+  const copyCoordinates = async (event) => {
+    event.stopPropagation();
+    if (!coordinates) return;
+
+    const text = `${coordinates.latitude}, ${coordinates.longitude}`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus("Copiado!");
+    } catch (error) {
+      console.error("Não foi possível copiar as coordenadas:", error);
+      setCopyStatus("Erro ao copiar");
+    }
+  };
+
+  return (
+    <div
+      data-map-export-ignore="true"
+      className="absolute bottom-[72px] right-3 z-[1000]"
+      onMouseDown={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
+    >
+      {expanded ? (
+        <div className="w-[230px] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-slate-200 bg-white/95 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+            <div className="flex items-center gap-1.5">
+              <Crosshair size={15} className="text-blue-600" aria-hidden="true" />
+              <span className="text-xs font-semibold text-slate-700">Coordenadas</span>
+              <span className="text-[10px] text-slate-400">WGS 84</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+              title="Recolher coordenadas"
+              aria-label="Recolher coordenadas"
+              aria-expanded={true}
+            >
+              <ChevronDown size={16} aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="px-3 pb-2.5 pt-2">
+            {coordinates ? (
+              <div className="space-y-1 font-mono text-[11px] tabular-nums text-slate-700">
+                <div className="flex items-center gap-2">
+                  <span className="w-7 text-slate-500">Lat:</span>
+                  <span>{coordinates.latitude}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-7 text-slate-500">Lon:</span>
+                  <span>{coordinates.longitude}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-500">
+                Mova o cursor ou toque no mapa.
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={copyCoordinates}
+              disabled={!coordinates}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md bg-blue-50 px-2 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Copiar latitude e longitude"
+            >
+              {copyStatus === "Copiado!" ? (
+                <Check size={13} aria-hidden="true" />
+              ) : (
+                <Copy size={13} aria-hidden="true" />
+              )}
+              {copyStatus || "Copiar coordenadas"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-lg transition hover:bg-blue-50 hover:text-blue-700"
+          title="Mostrar coordenadas"
+          aria-label="Mostrar coordenadas"
+          aria-expanded={false}
+        >
+          <Crosshair size={21} aria-hidden="true" />
+        </button>
       )}
     </div>
   );

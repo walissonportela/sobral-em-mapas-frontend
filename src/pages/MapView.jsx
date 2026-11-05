@@ -9,6 +9,9 @@ import TutorialOverlay from "../components/TutorialOverlay";
 function MapView() {
   const [activeLayers, setActiveLayers] = useState([]);
 
+  // Dados do mesmo catálogo carregado pela Sidebar, sem nova requisição à API.
+  const [availableLayers, setAvailableLayers] = useState([]);
+
   // Preferências temporárias de visualização, separadas por ID da camada.
   // Não modificam arquivos GeoJSON nem são enviadas ao Laravel.
   const [layerViewSettings, setLayerViewSettings] = useState({});
@@ -84,6 +87,7 @@ function MapView() {
             layerViewSettings={layerViewSettings}
             onLayerViewSettingsChange={handleLayerViewSettingsChange}
             onToggleLayer={handleLayerToggle}
+            onLayersLoaded={setAvailableLayers}
             onClearMap={handleClearLayers}
             onSearchLocation={handleSearchLocation}
             mapToolsRef={mapToolsRef}
@@ -92,6 +96,8 @@ function MapView() {
 
           <Map
             activeLayers={activeLayers}
+            availableLayers={availableLayers}
+            onToggleLayer={handleLayerToggle}
             layerViewSettings={layerViewSettings}
             searchLocation={searchLocation}
             mapToolsRef={mapToolsRef}
