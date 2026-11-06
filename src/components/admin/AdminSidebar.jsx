@@ -315,7 +315,6 @@ function SidebarContent({ user, role, sections, onNavigate }) {
             <ArrowLeft size={18} />
             Voltar ao mapa
           </span>
-          <ChevronRight size={15} className="text-blue-300/70" />
         </Link>
         <p className="mt-3 text-center text-[10px] tracking-[0.12em] text-blue-300/50">
           SOBRAL EM MAPAS
