@@ -374,6 +374,23 @@ export default function Map({
         .leaflet-layer.sobral-dark-contrast {
           filter: brightness(1.65) contrast(1.15) saturate(1.1);
         }
+
+        /* Etiquetas das medições: fundo claro e texto azul legível. */
+        .leaflet-tooltip.measurement-tooltip {
+          background: rgba(255, 255, 255, 0.97) !important;
+          color: #1e40af !important;
+          border: 1px solid #bfdbfe !important;
+          border-left: 3px solid #2563eb !important;
+          border-radius: 8px !important;
+          padding: 7px 11px !important;
+          font-size: 12px !important;
+          font-weight: 700 !important;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
+          white-space: nowrap !important;
+        }
+        .leaflet-tooltip.measurement-tooltip::before {
+          display: none !important;
+        }
       `}</style>
       <MapContainer
         center={position}
@@ -616,6 +633,50 @@ function MapCoordinatesDisplay() {
   );
 }
 
+// Unidades de exibição: os valores reais continuam em metros e metros quadrados.
+const MEASUREMENT_UNITS_STORAGE_KEY = "sobral_measurement_units_v1";
+
+function loadMeasurementUnits() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MEASUREMENT_UNITS_STORAGE_KEY) || "{}");
+    return {
+      distance: ["auto", "m", "km"].includes(saved?.distance) ? saved.distance : "auto",
+      area: ["auto", "m2", "km2"].includes(saved?.area) ? saved.area : "auto",
+    };
+  } catch {
+    return { distance: "auto", area: "auto" };
+  }
+}
+
+function formatMeasurementNumber(value, minimum = 2, maximum = minimum) {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: minimum,
+    maximumFractionDigits: maximum,
+  }).format(value);
+}
+
+function formatMeasurement(measurement, units) {
+  const rawValue = measurement?.value;
+  const value = Number(rawValue);
+  if (rawValue == null || !Number.isFinite(value)) return measurement?.text || "";
+
+  if (measurement.type === "polygon") {
+    const displayKm2 = units.area === "km2" || (units.area === "auto" && value >= 1_000_000);
+    return displayKm2
+      ? `${formatMeasurementNumber(value / 1_000_000, 2, 8)} km²`
+      : `${formatMeasurementNumber(value, 2)} m²`;
+  }
+
+  if (measurement.type === "polyline") {
+    const displayKm = units.distance === "km" || (units.distance === "auto" && value >= 1_000);
+    return displayKm
+      ? `${formatMeasurementNumber(value / 1_000, 2, 5)} km`
+      : `${formatMeasurementNumber(value, 2)} m`;
+  }
+
+  return measurement?.text || "";
+}
+
 function MapToolsBridge({
   searchLocation,
   mapToolsRef,
@@ -624,6 +685,46 @@ function MapToolsBridge({
 }) {
   const map = useMap();
   const activeDrawerRef = useRef(null);
+  const [measurementUnits, setMeasurementUnits] = useState(loadMeasurementUnits);
+
+  
+  const getMeasurements = useCallback(() => {
+    const layers = drawLayerRef.current?.getLayers() || [];
+
+    return layers
+      .filter((layer) => layer._sobralMeasurement)
+      .map((layer) => ({
+        id: L.stamp(layer),
+        ...layer._sobralMeasurement,
+        text: formatMeasurement(layer._sobralMeasurement, measurementUnits),
+      }));
+  }, [drawLayerRef, measurementUnits]);
+
+  const publishMeasurements = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent("sobral-measurements-changed", {
+        detail: getMeasurements(),
+      })
+    );
+  }, [getMeasurements]);
+
+  // Atualiza etiquetas e lista imediatamente após trocar a unidade.
+  useEffect(() => {
+    drawLayerRef.current?.eachLayer((layer) => {
+      if (!layer._sobralMeasurement || !layer.getTooltip?.()) return;
+      layer.setTooltipContent(formatMeasurement(layer._sobralMeasurement, measurementUnits));
+    });
+    publishMeasurements();
+  }, [drawLayerRef, measurementUnits, publishMeasurements]);
+
+  // Lembra a escolha quando o usuário troca de painel ou atualiza a página.
+  useEffect(() => {
+    try {
+      localStorage.setItem(MEASUREMENT_UNITS_STORAGE_KEY, JSON.stringify(measurementUnits));
+    } catch {
+      // Preferências são opcionais caso o armazenamento esteja indisponível.
+    }
+  }, [measurementUnits]);
 
   useEffect(() => {
     const drawLayer = L.featureGroup();
@@ -654,13 +755,8 @@ function MapToolsBridge({
       const { layerType, layer } = event;
 
       if (layerType === "polyline") {
-        const distance =
-          getPolylineDistance(layer);
-
-        const text =
-          distance >= 1000
-            ? `${(distance / 1000).toFixed(2)} km`
-            : `${Math.round(distance)} m`;
+        const measurement = { type: "polyline", value: getPolylineDistance(layer) };
+        const text = formatMeasurement(measurement, measurementUnits);
 
         layer.bindTooltip(text, {
           permanent: true,
@@ -669,15 +765,12 @@ function MapToolsBridge({
         });
 
         layer.openTooltip();
+        layer._sobralMeasurement = measurement;
       }
 
       if (layerType === "polygon") {
-        const area = getPolygonArea(layer);
-
-        const text =
-          area >= 1000000
-            ? `${(area / 1000000).toFixed(2)} km²`
-            : `${area.toFixed(2)} m²`;
+        const measurement = { type: "polygon", value: getPolygonArea(layer) };
+        const text = formatMeasurement(measurement, measurementUnits);
 
         layer.bindTooltip(text, {
           permanent: true,
@@ -686,9 +779,11 @@ function MapToolsBridge({
         });
 
         layer.openTooltip();
+        layer._sobralMeasurement = measurement;
       }
 
       drawLayerRef.current?.addLayer(layer);
+      publishMeasurements();
 
       activeDrawerRef.current = null;
       map.doubleClickZoom.enable();
@@ -705,7 +800,7 @@ function MapToolsBridge({
         handleCreated
       );
     };
-  }, [map, drawLayerRef]);
+  }, [map, drawLayerRef, publishMeasurements, measurementUnits]);
 
   useEffect(() => {
     const startDrawer = (drawer) => {
@@ -732,8 +827,35 @@ function MapToolsBridge({
         map.zoomOut();
       },
 
+      // Retorna a lista atual ao abrir novamente a aba Medição.
+      getMeasurements,
+
+      // Não recalcula geometria: apenas modifica a unidade exibida.
+      setMeasurementUnits: (changes) => {
+        setMeasurementUnits((previous) => {
+          const next = {
+            area: ["auto", "m2", "km2"].includes(changes?.area) ? changes.area : previous.area,
+            distance: ["auto", "m", "km"].includes(changes?.distance) ? changes.distance : previous.distance,
+          };
+          return next.area === previous.area && next.distance === previous.distance ? previous : next;
+        });
+      },
+
+      // Remove somente a medição escolhida pelo identificador do Leaflet.
+      deleteMeasurement: (id) => {
+        const group = drawLayerRef.current;
+        if (!group) return;
+
+        const layer = group.getLayer(Number(id));
+        if (!layer?._sobralMeasurement) return;
+
+        group.removeLayer(layer);
+        publishMeasurements();
+      },
+
       clearDrawings: () => {
         drawLayerRef.current?.clearLayers();
+        publishMeasurements();
 
         if (activeDrawerRef.current) {
           activeDrawerRef.current.disable();
@@ -825,6 +947,8 @@ function MapToolsBridge({
     mapToolsRef,
     drawLayerRef,
     printTools,
+    getMeasurements,
+    publishMeasurements,
   ]);
 
   return null;
