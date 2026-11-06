@@ -863,7 +863,7 @@ export default function Sidebar({
               subtitle="Pesquise endereços, bairros ou coordenadas"
             />
 
-            <SearchPanel onSearch={onSearchLocation} />
+            <SearchPanel onSearch={onSearchLocation} layers={layers} activeLayers={activeLayers} />
           </>
         )}
 

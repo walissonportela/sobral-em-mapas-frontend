@@ -202,107 +202,101 @@ export default function MapControls({
         )}
 
         {showLegend && (
-          <div className="absolute top-0 right-14 w-[320px] bg-white rounded-2xl shadow-xl border border-slate-200 z-[2000]">
-            <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50">
-              <h3 className="text-sm font-bold text-slate-700">
-                Legenda
-              </h3>
-
+          <div
+            className="absolute right-14 top-0 z-[2000] w-[270px] max-w-[calc(100vw-88px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+            onDoubleClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2.5">
+              <h3 className="text-[13px] font-bold text-slate-800">Legenda do mapa</h3>
               <button
+                type="button"
                 onClick={() => setShowLegend(false)}
-                className="text-slate-500 hover:text-slate-700 transition"
+                aria-label="Fechar legenda"
+                title="Fechar legenda"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
               >
-                <X size={16} />
+                <X size={15} />
               </button>
             </div>
 
-            <div className="p-4 max-h-[50vh] sm:max-h-[400px] overflow-y-auto space-y-5">
-
-              {/* Vias e Transportes */}
-              <div>
-                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3">
-                  Vias e Transportes
+            <div
+              className="space-y-3 overflow-y-auto overscroll-contain px-3 py-3"
+              style={{ maxHeight: "min(420px, calc(100dvh - 210px))" }}
+              onWheel={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+            >
+              {/* Símbolos ilustrativos das vias do mapa-base. */}
+              <section aria-label="Vias e transportes">
+                <h4 className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                  Vias e transportes
                 </h4>
-
-                <div className="space-y-2.5">
+                <div className="space-y-0.5">
                   <LegendItem
-                    visual={<div className="w-6 h-1.5 bg-orange-400 rounded-sm"></div>}
+                    visual={<span className="block h-1 w-5 rounded-full bg-orange-400" />}
                     label="Rodovia / BR"
                   />
-
                   <LegendItem
                     visual={
-                      <div className="w-6 h-1 rounded-sm overflow-hidden flex">
-                        <div className="w-1/2 bg-yellow-300 border-y border-yellow-500"></div>
-                        <div className="w-1/2 bg-orange-400 border-y border-orange-600"></div>
-                      </div>
+                      <span className="flex h-[3px] w-5 overflow-hidden rounded-full">
+                        <span className="h-full w-1/2 bg-yellow-400" />
+                        <span className="h-full w-1/2 bg-orange-500" />
+                      </span>
                     }
                     label="Estrada principal / CE e BR"
                   />
-
                   <LegendItem
-                    visual={<div className="w-6 h-[3px] bg-white border-y border-slate-300"></div>}
+                    visual={<span className="block h-[2px] w-5 rounded-full bg-slate-300" />}
                     label="Rua comum"
                   />
-
                   <LegendItem
-                    visual={<div className="w-6 h-[2px] border-b-[2px] border-dashed border-slate-400"></div>}
+                    visual={<span className="block w-5 border-t-2 border-dashed border-slate-400" />}
                     label="Via de pedestre / Trilha"
                   />
-
                   <LegendItem
-                    visual={<div className="w-6 h-[2px] border-b-[2px] border-dotted border-blue-500"></div>}
+                    visual={<span className="block w-5 border-t-2 border-dotted border-blue-500" />}
                     label="Ciclovia"
                   />
-
                   <LegendItem
                     visual={
-                      <div className="w-6 h-1 relative flex items-center justify-center">
-                        <div className="absolute w-full h-[2px] bg-slate-500"></div>
-                        <div className="absolute w-full h-[6px] border-x-2 border-slate-500 flex justify-evenly">
-                          <div className="w-px h-full bg-slate-500"></div>
-                        </div>
-                      </div>
+                      <span className="relative block h-3 w-5">
+                        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-500" />
+                        <span className="absolute left-0 top-0.5 h-2 w-px bg-slate-500" />
+                        <span className="absolute left-2 top-0.5 h-2 w-px bg-slate-500" />
+                        <span className="absolute right-0 top-0.5 h-2 w-px bg-slate-500" />
+                      </span>
                     }
                     label="Ferrovia"
                   />
                 </div>
-              </div>
+              </section>
 
-              {/* Uso do Solo */}
-              <div>
-                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3">
-                  Uso do Solo
+              <section aria-label="Uso do solo" className="border-t border-slate-100 pt-3">
+                <h4 className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                  Uso do solo
                 </h4>
-
-                <div className="space-y-2.5">
+                <div className="space-y-0.5">
                   <LegendItem
-                    visual={<div className="w-5 h-5 bg-[#aad3df] rounded-sm"></div>}
+                    visual={<span className="block h-3.5 w-3.5 rounded-[3px] bg-[#aad3df]" />}
                     label="Rio / Lago / Água"
                   />
-
                   <LegendItem
-                    visual={<div className="w-5 h-5 bg-[#c8facc] rounded-sm"></div>}
+                    visual={<span className="block h-3.5 w-3.5 rounded-[3px] bg-[#c8facc]" />}
                     label="Parque / Praça"
                   />
-
                   <LegendItem
-                    visual={<div className="w-5 h-5 bg-[#8dc56c] rounded-sm"></div>}
+                    visual={<span className="block h-3.5 w-3.5 rounded-[3px] bg-[#8dc56c]" />}
                     label="Floresta / Mata"
                   />
-
                   <LegendItem
-                    visual={<div className="w-5 h-5 bg-[#e0dfdf] rounded-sm"></div>}
+                    visual={<span className="block h-3.5 w-3.5 rounded-[3px] bg-[#e0dfdf]" />}
                     label="Área residencial"
                   />
-
                   <LegendItem
-                    visual={<div className="w-5 h-5 bg-[#ebdbe8] rounded-sm"></div>}
+                    visual={<span className="block h-3.5 w-3.5 rounded-[3px] bg-[#ebdbe8]" />}
                     label="Área industrial"
                   />
                 </div>
-              </div>
-
+              </section>
             </div>
           </div>
         )}
@@ -313,12 +307,11 @@ export default function MapControls({
 
 function LegendItem({ visual, label }) {
   return (
-    <div className="flex items-center gap-3 text-sm text-slate-600">
-      <div className="w-7 flex justify-center shrink-0">
+    <div className="flex min-h-7 items-center gap-2 rounded-md px-1 py-1 text-[12px] leading-tight text-slate-700">
+      <span className="flex h-4 w-6 shrink-0 items-center justify-center" aria-hidden="true">
         {visual}
-      </div>
-
-      <span>{label}</span>
+      </span>
+      <span className="min-w-0">{label}</span>
     </div>
   );
 }

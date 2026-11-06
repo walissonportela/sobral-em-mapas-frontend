@@ -1,6 +1,9 @@
 import {
   MapContainer,
   TileLayer,
+  CircleMarker,
+  Marker,
+  Popup,
   GeoJSON,
   WMSTileLayer,
   useMap,
@@ -9,7 +12,7 @@ import {
   Pane,
 } from "react-leaflet";
 
-import { Crosshair, ChevronDown, Copy, Check } from "lucide-react";
+import { Crosshair, ChevronDown, Copy, Check, MapPin } from "lucide-react";
 
 import L from "leaflet";
 import domtoimage from "dom-to-image-more";
@@ -38,6 +41,35 @@ const API_BASE_URL =
 
 // Chave pública dos mapas-base da CARTO (configurada no .env.local do Vite).
 const CARTO_BASEMAP_KEY = (import.meta.env.VITE_CARTO_BASEMAP_KEY || "").trim();
+
+
+const searchPinIcon = L.divIcon({
+  className: "",
+  html: `
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="36"
+      height="44"
+      viewBox="0 0 36 44"
+    >
+      <path
+        d="M18 2C9 2 3 9 3 17c0 12 15 24 15 24s15-12 15-24C33 9 27 2 18 2Z"
+        fill="#2563eb"
+        stroke="#ffffff"
+        stroke-width="2.5"
+      />
+      <circle
+        cx="18"
+        cy="17"
+        r="6"
+        fill="#ffffff"
+      />
+    </svg>
+  `,
+  iconSize: [36, 44],
+  iconAnchor: [18, 42],
+  popupAnchor: [0, -39],
+});
 
 export default function Map({
   activeLayers = [],
@@ -170,8 +202,6 @@ export default function Map({
   }, []);
 
   
-
-
   const exportSelectedArea = useCallback(
     async (selectedFormat = printFormat) => {
       try {
@@ -391,6 +421,7 @@ export default function Map({
         .leaflet-tooltip.measurement-tooltip::before {
           display: none !important;
         }
+          
       `}</style>
       <MapContainer
         center={position}
@@ -489,6 +520,53 @@ export default function Map({
             />
           ))}
 
+
+        {/* Marca o resultado selecionado na pesquisa, acima das outras camadas. */}
+        
+        {/* Pino do local encontrado na pesquisa */}
+        <Pane name="search-result-highlight" style={{ zIndex: 670 }}>
+          {searchLocation &&
+            Number.isFinite(Number(searchLocation.lat)) &&
+            Number.isFinite(Number(searchLocation.lon)) && (
+              <Marker
+                position={[
+                  Number(searchLocation.lat),
+                  Number(searchLocation.lon),
+                ]}
+                icon={searchPinIcon}
+              >
+                
+                <Popup
+                  className="sobral-search-popup"
+                  minWidth={220}
+                  maxWidth={240}
+                  offset={[0, -5]}
+                >
+                  <div className="px-3 py-3">
+                    <div className="mb-2 flex items-center gap-1.5 pr-6">
+                      <MapPin size={14} className="shrink-0 text-blue-600" />
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                        Local encontrado
+                      </span>
+                    </div>
+
+                    <h3 className="m-0 break-words text-[15px] font-bold leading-snug text-slate-800">
+                      {searchLocation.name || "Local encontrado"}
+                    </h3>
+
+                    <div className="mt-2 flex items-center gap-1.5 border-t border-slate-100 pt-2">
+                      <Crosshair size={12} className="shrink-0 text-slate-400" />
+                      <span className="text-[11px] text-slate-500">
+                        {Number(searchLocation.lat).toFixed(5)},{" "}
+                        {Number(searchLocation.lon).toFixed(5)}
+                      </span>
+                    </div>
+                  </div>
+                </Popup>
+
+              </Marker>
+            )}
+        </Pane>
 
       </MapContainer>
 
