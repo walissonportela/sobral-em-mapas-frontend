@@ -97,6 +97,7 @@ export default function LayerFormModal({
   const isEditing = Boolean(layer);
 
   const [form, setForm] = useState(() => getInitialForm(layer));
+  const [showErrors, setShowErrors] = useState(false);
 
   const isGeoJSON = form.source_format === "GEOJSON";
 
@@ -214,27 +215,32 @@ export default function LayerFormModal({
 
   }, [availableLayers, wmsSearch]);
 
+  // Validação compartilhada pelo cadastro e pela edição.
+  // Só exibimos os avisos depois da primeira tentativa de salvar.
+  const validationErrors = {
+    geojson_path:
+      isGeoJSON && !GEOJSON_PATH_PATTERN.test(form.geojson_path.trim())
+        ? "Selecione, envie ou desenhe um arquivo GeoJSON."
+        : "",
+    name: !form.name.trim()
+      ? "Informe o nome de exibição da camada."
+      : "",
+    layer_name: !normalizeTechnicalName(form.layer_name)
+      ? "Informe o identificador técnico da camada."
+      : "",
+    subcategory: !String(form.subcategory ?? "").trim()
+      ? "Selecione uma subcategoria para organizar a camada."
+      : "",
+  };
+
   const canSave =
-
     !loading &&
-
     !fileUploading &&
-
-    form.name.trim().length > 0 &&
-
-    normalizeTechnicalName(form.layer_name).length > 0 &&
-
-    form.subcategory !== "" &&
-
-    (!isGeoJSON || GEOJSON_PATH_PATTERN.test(form.geojson_path.trim()));
-
-
+    !Object.values(validationErrors).some(Boolean);
 
   useEffect(() => {
 
     if (!isGeoJSON) return;
-
-
 
     let active = true;
 
@@ -260,8 +266,6 @@ export default function LayerFormModal({
 
     fetchFiles();
 
-
-
     return () => {
 
       active = false;
@@ -269,8 +273,6 @@ export default function LayerFormModal({
     };
 
   }, [isGeoJSON]);
-
-
 
   const refreshGeojsonFiles = async () => {
 
@@ -296,8 +298,6 @@ export default function LayerFormModal({
 
   };
 
-
-
   const handleUploadGeojson = async (event) => {
 
     const file = event.target.files?.[0];
@@ -307,8 +307,6 @@ export default function LayerFormModal({
     event.target.value = "";
 
     if (!file) return;
-
-
 
     if (!file.name.toLowerCase().endsWith(".geojson")) {
 
@@ -325,8 +323,6 @@ export default function LayerFormModal({
       return;
 
     }
-
-
 
     setFileUploading(true);
 
@@ -379,8 +375,6 @@ export default function LayerFormModal({
     }
 
   };
-
-
 
   // Abre uma cópia da camada existente para edição. O arquivo publicado fica
 
@@ -448,8 +442,6 @@ export default function LayerFormModal({
 
   };
 
-
-
   const handleSaveDrawing = async (geojson) => {
 
     if (!geojson?.features?.length) return;
@@ -463,8 +455,6 @@ export default function LayerFormModal({
       type: "application/geo+json",
 
     });
-
-
 
     setFileUploading(true);
 
@@ -536,8 +526,6 @@ export default function LayerFormModal({
 
   };
 
-
-
   const clearPreview = () => {
 
     geojsonAbortRef.current?.abort();
@@ -552,8 +540,6 @@ export default function LayerFormModal({
 
   };
 
-
-
   const change = (field, value) => {
 
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -561,8 +547,6 @@ export default function LayerFormModal({
     if (field === "layer_name" || field === "geojson_path") clearPreview();
 
   };
-
-
 
   const changeSourceFormat = (value) => {
 
@@ -592,8 +576,6 @@ export default function LayerFormModal({
 
   };
 
-
-
   const changeWmsLink = (value) => {
 
     requestIdRef.current += 1;
@@ -611,8 +593,6 @@ export default function LayerFormModal({
     clearPreview();
 
   };
-
-
 
   const fetchWmsLayers = async () => {
 
@@ -730,8 +710,6 @@ export default function LayerFormModal({
 
     }
 
-
-
     const path = form.geojson_path.trim();
 
     if (!GEOJSON_PATH_PATTERN.test(path)) {
@@ -742,8 +720,6 @@ export default function LayerFormModal({
 
     }
 
-
-
     clearPreview();
 
     const controller = new AbortController();
@@ -751,8 +727,6 @@ export default function LayerFormModal({
     geojsonAbortRef.current = controller;
 
     setPreviewLoading(true);
-
-
 
     try {
 
@@ -796,15 +770,11 @@ export default function LayerFormModal({
 
       if (!valid) throw new Error("O arquivo não contém dados GeoJSON válidos.");
 
-
-
       // Validar também as geometrias antes de renderizar o mapa.
 
       const bounds = L.geoJSON(data).getBounds();
 
       if (!bounds.isValid()) throw new Error("O GeoJSON não contém geometrias com coordenadas válidas.");
-
-
 
       if (controller.signal.aborted) return;
 
@@ -850,15 +820,29 @@ export default function LayerFormModal({
 
   };
 
-
-
   const handleSubmit = (event) => {
 
     event.preventDefault();
+    if (loading || fileUploading) return;
 
-    if (!canSave) return;
-
-
+    setShowErrors(true);
+    if (!canSave) {
+      const fieldIds = {
+        geojson_path: "layer-stored-geojson",
+        name: "layer-name",
+        layer_name: "layer-technical",
+        subcategory: "layer-subcategory-trigger",
+      };
+      const firstInvalid = Object.keys(validationErrors).find(
+        (key) => Boolean(validationErrors[key])
+      );
+      const element = firstInvalid
+        ? document.getElementById(fieldIds[firstInvalid])
+        : null;
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      element?.focus({ preventScroll: true });
+      return;
+    }
 
     onSubmit?.({
 
@@ -960,43 +944,63 @@ export default function LayerFormModal({
 
         </header>
 
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
 
           <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
 
             <div className="space-y-6 p-5 sm:p-7">
+              {showErrors && Object.values(validationErrors).some(Boolean) && (
+                <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                  <span>Confira os campos destacados antes de {isEditing ? "salvar as alterações" : "cadastrar a camada"}.</span>
+                </div>
+              )}
 
               <section aria-labelledby="source-section-title">
 
                   <SectionTitle number="1" icon={<Link2 size={18} />} title="Fonte cartográfica" id="source-section-title" />
 
-                  
                   <Field
+
                     label="Formato da camada"
+
                     htmlFor="layer-source-format"
+
                     help="Selecione o formato da camada. Atualmente, apenas arquivos GeoJSON estão disponíveis."
+
                   >
+
                     <select
+
                       id="layer-source-format"
+
                       className={inputClass}
+
                       value={form.source_format}
+
                       onChange={(e) => changeSourceFormat(e.target.value)}
+
                       disabled={loading}
+
                     >
+
                       <option value="GEOJSON">
+
                         Arquivo - GeoJSON
+
                       </option>
 
                       <option value="WMS" disabled>
+
                         WMS — Serviço geoespacial (Indisponível)
+
                       </option>
+
                     </select>
+
                   </Field>
 
-
               </section>
-
-
 
               {isGeoJSON ? (
 
@@ -1019,8 +1023,6 @@ export default function LayerFormModal({
                       Escolha um arquivo já disponível ou envie um novo para utilizar nesta camada.
 
                     </p>
-
-
 
                     <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
 
@@ -1054,15 +1056,23 @@ export default function LayerFormModal({
 
                       </div>
 
-
-
-                      <Field label="Arquivo GeoJSON *" htmlFor="layer-stored-geojson">
+                      <Field
+                          label="Arquivo GeoJSON *"
+                          htmlFor="layer-stored-geojson"
+                          error={showErrors ? validationErrors.geojson_path : ""}
+                        >
 
                         <select
 
                           id="layer-stored-geojson"
+                          aria-invalid={showErrors && Boolean(validationErrors.geojson_path)}
+                          aria-describedby={showErrors && validationErrors.geojson_path ? "layer-stored-geojson-error" : undefined}
 
-                          className={inputClass}
+                          className={`${inputClass} ${
+                            showErrors && validationErrors.geojson_path
+                              ? "border-red-400 bg-red-50/30"
+                              : ""
+                          }`}
 
                           value={selectedGeojsonPath}
 
@@ -1116,8 +1126,6 @@ export default function LayerFormModal({
 
                       </Field>
 
-
-
                       {!filesLoading && storedGeojsonFiles.length === 0 && !selectedGeojsonPath && (
 
                         <p className="text-xs text-slate-500">
@@ -1128,8 +1136,6 @@ export default function LayerFormModal({
 
                       )}
 
-
-
                       <div className="flex items-center gap-3" aria-hidden="true">
 
                         <span className="h-px flex-1 bg-slate-200" />
@@ -1139,8 +1145,6 @@ export default function LayerFormModal({
                         <span className="h-px flex-1 bg-slate-200" />
 
                       </div>
-
-
 
                       <div>
 
@@ -1185,8 +1189,6 @@ export default function LayerFormModal({
                         </p>
 
                       </div>
-
-
 
                       <div className="flex items-center gap-3" aria-hidden="true">
 
@@ -1271,8 +1273,6 @@ export default function LayerFormModal({
                         />
 
                       )}
-
-
 
                       {filesError && <Feedback tone="error">{filesError}</Feedback>}
 
@@ -1498,11 +1498,19 @@ export default function LayerFormModal({
 
                 <div className="grid gap-4 sm:grid-cols-2">
 
-                  <Field label="Nome de exibição *" htmlFor="layer-name" className="sm:col-span-2" help="Nome que aparece na lista de mapas para o usuário.">
+                  <Field
+                    label="Nome de exibição *"
+                    htmlFor="layer-name"
+                    className="sm:col-span-2"
+                    help="Nome que aparece na lista de mapas para o usuário."
+                    error={showErrors ? validationErrors.name : ""}
+                  >
 
                     <input
 
                       id="layer-name"
+                      aria-invalid={showErrors && Boolean(validationErrors.name)}
+                      aria-describedby={showErrors && validationErrors.name ? "layer-name-error" : undefined}
 
                       type="text"
 
@@ -1518,7 +1526,7 @@ export default function LayerFormModal({
 
                       placeholder="Ex.: Bairros de Sobral"
 
-                      className={inputClass}
+                      className={`${inputClass} ${showErrors && validationErrors.name ? "border-red-400 bg-red-50/30" : ""}`}
 
                     />
 
@@ -1529,6 +1537,8 @@ export default function LayerFormModal({
                     label={isGeoJSON ? "Identificador técnico *" : "Nome técnico no GeoServer *"}
 
                     htmlFor="layer-technical"
+                    className="sm:col-span-2"
+                    error={showErrors ? validationErrors.layer_name : ""}
 
                     help={isGeoJSON
 
@@ -1541,6 +1551,8 @@ export default function LayerFormModal({
                     <input
 
                       id="layer-technical"
+                      aria-invalid={showErrors && Boolean(validationErrors.layer_name)}
+                      aria-describedby={showErrors && validationErrors.layer_name ? "layer-technical-error" : undefined}
 
                       type="text"
 
@@ -1556,44 +1568,26 @@ export default function LayerFormModal({
 
                       placeholder={isGeoJSON ? "Ex.: bairros_sobral" : "Ex.: escolas_municipais"}
 
-                      className={inputClass}
+                      className={`${inputClass} ${showErrors && validationErrors.layer_name ? "border-red-400 bg-red-50/30" : ""}`}
 
                     />
 
                   </Field>
 
-                  <Field label="Subcategoria *" htmlFor="layer-subcategory" help="Define onde a camada ficará organizada no menu.">
-
-                    <select
-
-                      id="layer-subcategory"
-
-                      required
-
+                  <Field
+                    label="Subcategoria *"
+                    htmlFor="layer-subcategory-trigger"
+                    className="sm:col-span-2"
+                    help="Escolha a categoria e a subcategoria em que o mapa aparecerá."
+                    error={showErrors ? validationErrors.subcategory : ""}
+                  >
+                    <SubcategoryPicker
+                      subcategories={subcategories}
                       value={form.subcategory}
-
-                      onChange={(e) => change("subcategory", e.target.value)}
-
+                      onChange={(id) => change("subcategory", id)}
                       disabled={loading}
-
-                      className={inputClass}
-
-                    >
-
-                      <option value="">Selecione uma subcategoria</option>
-
-                      {subcategories.map((item) => (
-
-                        <option key={item.id} value={item.id}>
-
-                          {getSubcategoryLabel(item)}
-
-                        </option>
-
-                      ))}
-
-                    </select>
-
+                      invalid={showErrors && Boolean(validationErrors.subcategory)}
+                    />
                   </Field>
 
                 </div>
@@ -1902,7 +1896,7 @@ export default function LayerFormModal({
 
                 type="submit"
 
-                disabled={!canSave}
+                disabled={loading || fileUploading}
 
                 className="flex min-w-36 items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
 
@@ -1948,8 +1942,6 @@ function previewFeatureStyle(feature) {
 
   const lineType = saved?.tipo_linha;
 
-
-
   return {
 
     color,
@@ -1982,8 +1974,6 @@ function previewFeatureStyle(feature) {
 
 }
 
-
-
 function previewPointToLayer(feature, latlng) {
 
   const rawSize = Number(feature?.properties?.estilo?.tamanho_ponto);
@@ -2009,8 +1999,6 @@ function previewPointToLayer(feature, latlng) {
   });
 
 }
-
-
 
 function PreviewMap({ config, onLoaded, onError }) {
 
@@ -2092,8 +2080,6 @@ function PreviewMap({ config, onLoaded, onError }) {
 
 }
 
-
-
 function FitGeoJsonBounds({ data }) {
 
   const map = useMap();
@@ -2109,8 +2095,6 @@ function FitGeoJsonBounds({ data }) {
   return null;
 
 }
-
-
 
 function SectionTitle({ number, icon, title, id }) {
 
@@ -2130,22 +2114,191 @@ function SectionTitle({ number, icon, title, id }) {
 
 }
 
-function Field({ label, htmlFor, children, help, className = "" }) {
-
+function Field({ label, htmlFor, children, help, error, className = "" }) {
   return (
-
     <div className={className}>
-
-      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
-
+      <label htmlFor={htmlFor} className={`mb-1.5 block text-sm font-semibold ${error ? "text-red-700" : "text-slate-700"}`}>
+        {label}
+      </label>
       {children}
-
-      {help && <p className="mt-1 text-xs text-slate-500">{help}</p>}
-
+      {error && (
+        <p id={`${htmlFor}-error`} role="alert" className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-red-600">
+          <AlertCircle size={14} className="shrink-0" />
+          {error}
+        </p>
+      )}
+      {help && !error && <p className="mt-1 text-xs text-slate-500">{help}</p>}
     </div>
+  );
+}
 
+// Seleção pesquisável com categorias agrupadas e lista interna limitada.
+// O componente não modifica os IDs, preservando o contrato com a API Laravel.
+function SubcategoryPicker({ subcategories, value, onChange, disabled, invalid }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const searchRef = useRef(null);
+
+  const selectedItem = subcategories.find(
+    (item) => String(item.id) === String(value)
   );
 
+  const grouped = useMemo(() => {
+    const term = normalizeSearchText(search.trim());
+    const sorted = [...subcategories]
+      .filter((item) => normalizeSearchText(
+        `${item.category?.name || "Sem categoria"} ${item.name || ""}`
+      ).includes(term))
+      .sort((a, b) => {
+        const categoryA = a.category?.name || "Sem categoria";
+        const categoryB = b.category?.name || "Sem categoria";
+        return categoryA.localeCompare(categoryB, "pt-BR") ||
+          String(a.name || "").localeCompare(String(b.name || ""), "pt-BR");
+      });
+
+    const groups = [];
+    sorted.forEach((item) => {
+      const category = item.category?.name || "Sem categoria";
+      const lastGroup = groups[groups.length - 1];
+      if (!lastGroup || lastGroup.category !== category) {
+        groups.push({ category, items: [] });
+      }
+      groups[groups.length - 1].items.push(item);
+    });
+    return groups;
+  }, [search, subcategories]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) searchRef.current?.focus();
+  }, [open]);
+
+  const choose = (id) => {
+    onChange(String(id));
+    setOpen(false);
+    setSearch("");
+    triggerRef.current?.focus();
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      className="relative min-w-0"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.stopPropagation();
+          setOpen(false);
+          triggerRef.current?.focus();
+        }
+      }}
+    >
+      <button
+        id="layer-subcategory-trigger"
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        aria-invalid={Boolean(invalid)}
+        aria-describedby={invalid ? "layer-subcategory-trigger-error" : undefined}
+        aria-expanded={open}
+        aria-controls="layer-subcategory-options"
+        onClick={() => setOpen((previous) => !previous)}
+        className={`${inputClass} flex min-h-12 items-center justify-between gap-3 text-left ${
+          invalid ? "border-red-400 bg-red-50/30" : ""
+        }`}
+      >
+        <span className="min-w-0 flex-1">
+          {selectedItem ? (
+            <>
+              <span className="block truncate text-xs text-slate-500">
+                {selectedItem.category?.name || "Sem categoria"}
+              </span>
+              <span className="block break-words font-medium text-slate-800">
+                {selectedItem.name}
+              </span>
+            </>
+          ) : (
+            <span className="text-slate-500">Selecione uma subcategoria</span>
+          )}
+        </span>
+        <ChevronDown size={18} className={`shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="relative border-b border-slate-100 p-2">
+            <Search size={16} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              ref={searchRef}
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              disabled={disabled}
+              aria-label="Pesquisar categorias e subcategorias"
+              placeholder="Pesquisar categoria ou subcategoria..."
+              className={`${inputClass} pl-10`}
+            />
+          </div>
+          <div
+            id="layer-subcategory-options"
+            role="group"
+            aria-label="Subcategorias disponíveis"
+            className="max-h-52 space-y-3 overflow-y-auto overscroll-contain p-2"
+          >
+            {grouped.length ? grouped.map((group) => (
+              <div key={group.category} className="space-y-1">
+                <p className="px-2 py-1 text-xs font-bold text-slate-500">
+                  {group.category}
+                </p>
+                {group.items.map((item) => {
+                  const selected = String(value) === String(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={selected}
+                      disabled={disabled}
+                      onClick={() => choose(item.id)}
+                      className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition disabled:opacity-50 ${
+                        selected
+                          ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
+                          : "border-transparent text-slate-700 hover:border-blue-200 hover:bg-blue-50"
+                      }`}
+                    >
+                      <span className="min-w-0 break-words">
+                        {item.name}{item.is_active === false ? " (inativa)" : ""}
+                      </span>
+                      {selected && <CheckCircle2 size={17} className="shrink-0 text-blue-600" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )) : (
+              <p className="p-4 text-center text-sm text-slate-500">
+                Nenhuma subcategoria encontrada.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function Feedback({ tone = "error", children }) {
@@ -2163,8 +2316,6 @@ function Feedback({ tone = "error", children }) {
   );
 
 }
-
-
 
 // Traduz falhas HTTP do proxy/GeoServer para mensagens compreensíveis.
 
@@ -2190,15 +2341,11 @@ function getFriendlyWmsError(error) {
 
     .join(" ");
 
-
-
   if (status === 502 || /\b502\b|bad gateway/i.test(serverMessage)) {
 
     return "Serviço WMS indisponível no momento (erro 502). Não foi possível consultar as camadas desse servidor. Tente novamente mais tarde.";
 
   }
-
-
 
   if (status === 504 || /\b504\b|gateway timeout/i.test(serverMessage)) {
 
@@ -2206,15 +2353,11 @@ function getFriendlyWmsError(error) {
 
   }
 
-
-
   if (status === 503 || /\b503\b|service unavailable/i.test(serverMessage)) {
 
     return "O serviço WMS está indisponível no momento (erro 503). Tente novamente mais tarde.";
 
   }
-
-
 
   if (status === 404) {
 
@@ -2222,15 +2365,11 @@ function getFriendlyWmsError(error) {
 
   }
 
-
-
   if (status === 401 || status === 403) {
 
     return "O acesso a esse serviço WMS não foi autorizado. Verifique as permissões do servidor.";
 
   }
-
-
 
   if (error?.code === "ECONNABORTED" || status === 408) {
 
@@ -2238,21 +2377,15 @@ function getFriendlyWmsError(error) {
 
   }
 
-
-
   if (!error?.response) {
 
     return "Não foi possível estabelecer comunicação com a API. Verifique sua conexão e se o backend está funcionando.";
 
   }
 
-
-
   return "Não foi possível consultar as camadas do serviço WMS. Verifique a disponibilidade do servidor e tente novamente.";
 
 }
-
-
 
 function formatFileSize(sizeBytes) {
 
@@ -2265,8 +2398,6 @@ function formatFileSize(sizeBytes) {
     : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 }
-
-
 
 function getFriendlyGeojsonApiError(error) {
 
@@ -2313,8 +2444,6 @@ function getFriendlyGeojsonApiError(error) {
   return "Não foi possível acessar os arquivos. Verifique sua conexão e tente novamente.";
 
 }
-
-
 
 function getGeojsonDisplayName(pathOrName) {
 
@@ -2397,14 +2526,6 @@ function getLayerSubcategoryId(layer) {
     typeof layer.subcategory === "object" ? layer.subcategory.id : layer.subcategory
 
   );
-
-}
-
-function getSubcategoryLabel(item) {
-
-  const category = item.category?.name || "Sem categoria";
-
-  return `${category} / ${item.name}${item.is_active === false ? " (inativa)" : ""}`;
 
 }
 
