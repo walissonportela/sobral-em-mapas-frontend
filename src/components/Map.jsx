@@ -460,11 +460,13 @@ export default function Map({
         <MapCoordinatesDisplay />
 
         <Pane name="base-map" style={{ zIndex: 200 }}>
+          
           <TileLayer
             key={layerType}
             url={layerUrl}
             className={layerType === "darkContrast" ? "sobral-dark-contrast" : ""}
             crossOrigin="anonymous"
+            maxNativeZoom={layerType === "satellite" ? 17 : undefined}
             attribution={
               layerType === "light" || layerType === "dark" || layerType === "darkContrast"
                 ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attribution/">CARTO</a>'
@@ -475,6 +477,7 @@ export default function Map({
                     : 'Tiles &copy; Esri, Maxar'
             }
           />
+
         </Pane>
 
         <Pane name="wms-layers" style={{ zIndex: 450 }}>

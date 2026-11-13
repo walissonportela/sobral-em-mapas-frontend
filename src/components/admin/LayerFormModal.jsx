@@ -970,37 +970,29 @@ export default function LayerFormModal({
 
                   <SectionTitle number="1" icon={<Link2 size={18} />} title="Fonte cartográfica" id="source-section-title" />
 
+                  
                   <Field
-
                     label="Formato da camada"
-
                     htmlFor="layer-source-format"
-
-                    help="Escolha um serviço de mapas (WMS) ou um arquivo geográfico (GeoJSON)."
-
+                    help="Selecione o formato da camada. Atualmente, apenas arquivos GeoJSON estão disponíveis."
                   >
-
                     <select
-
                       id="layer-source-format"
-
                       className={inputClass}
-
                       value={form.source_format}
-
                       onChange={(e) => changeSourceFormat(e.target.value)}
-
                       disabled={loading}
-
                     >
+                      <option value="GEOJSON">
+                        Arquivo - GeoJSON
+                      </option>
 
-                      <option value="GEOJSON">GeoJSON — Arquivo</option>
-
-                      <option value="WMS">WMS — Serviço geoespacial</option>
-
+                      <option value="WMS" disabled>
+                        WMS — Serviço geoespacial (Indisponível)
+                      </option>
                     </select>
-
                   </Field>
+
 
               </section>
 

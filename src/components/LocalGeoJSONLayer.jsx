@@ -150,9 +150,9 @@ const DEFAULT_STYLE = {
 
 // Evita ícones agrupados e rótulos gigantes quando o usuário afasta muito.
 
-// Zoom 10 ou maior restaura automaticamente os marcadores e os nomes elegíveis.
+// Zoom 8 ou maior restaura automaticamente os marcadores e os nomes elegíveis.
 
-const MIN_SYMBOL_ZOOM = 10;
+const MIN_SYMBOL_ZOOM = 8;
 
 function styleForFeature(feature, colorOverride = null, strokeWidthOverride = null, fillOpacityOverride = null) {
 
