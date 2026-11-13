@@ -596,11 +596,8 @@ export default function Map({
 function MapCoordinatesDisplay() {
   const [coordinates, setCoordinates] = useState(null);
   const [copyStatus, setCopyStatus] = useState("");
-  const [expanded, setExpanded] = useState(() =>
-    typeof window === "undefined"
-      ? true
-      : window.matchMedia("(min-width: 640px)").matches
-  );
+  const [expanded, setExpanded] = useState(false);
+
 
   useMapEvents({
     mousemove(event) {
