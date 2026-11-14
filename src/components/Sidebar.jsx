@@ -794,10 +794,10 @@ export default function Sidebar({
                           border-yellow-100
                         "
                       >
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex flex-1 items-center gap-2 min-w-0">
                           <div className="h-2 w-2 rounded-full bg-blue-600 shrink-0" />
 
-                          <span className="text-sm font-medium text-gray-700 truncate">
+                          <span className="min-w-0 flex-1 text-sm font-medium text-gray-700 whitespace-normal break-words leading-5">
                             {layer.name}
                           </span>
                         </div>
@@ -1226,7 +1226,11 @@ function LayerRow({
 
       <label
         htmlFor={inputId}
-        className="text-sm font-medium text-gray-700 truncate flex-1 cursor-pointer"
+        className="
+          min-w-0 flex-1 cursor-pointer
+          text-sm font-medium text-gray-700
+          whitespace-normal break-words leading-5
+        "
       >
         {layer.name}
       </label>

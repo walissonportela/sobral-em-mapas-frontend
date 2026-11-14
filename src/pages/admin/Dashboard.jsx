@@ -277,10 +277,10 @@ export default function Dashboard() {
               description="Distribuição das categorias, subcategorias e camadas cadastradas."
               trailing={
                 <div className="flex flex-wrap gap-2">
-                  <Badge tone="green" icon={<CheckCircle2 size={13} />}>
+                  <Badge icon={<CheckCircle2 size={13} />}>
                     {activeStructureTotal} ativos
                   </Badge>
-                  <Badge tone="red" icon={<XCircle size={13} />}>
+                  <Badge icon={<XCircle size={13} />}>
                     {inactiveStructureTotal} inativos
                   </Badge>
                 </div>
