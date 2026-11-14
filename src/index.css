@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+/* Tipografia padrão do Sobral em Mapas */
+:root {
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+body,
+button,
+input,
+select,
+textarea,
+.leaflet-container,
+.leaflet-popup,
+.leaflet-tooltip {
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+
 /* CSS PURO - Sem Tailwind para evitar erros de compilação */
 /* Isso garante que o visual "Wall" funcione sem travar o Vite */
 
