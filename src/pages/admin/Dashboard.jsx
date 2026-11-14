@@ -424,18 +424,31 @@ function DashboardCard({ title, value, subtitle, icon, tone = "blue" }) {
   const color = tones[tone] || tones.blue;
 
   return (
+    
     <div className="relative overflow-hidden rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-6">
-      <div className={`absolute left-0 top-0 h-1 w-full ${color.detail}`} aria-hidden="true" />
+      <div
+        className={`absolute left-0 top-0 h-full w-1 ${color.detail}`}
+        aria-hidden="true"
+      />
+
       <div className="flex items-start justify-between gap-3">
         <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${color.icon}`}>
           {icon}
         </div>
         <Activity size={17} className="text-slate-300" />
       </div>
+
       <p className="mt-5 text-sm font-medium text-slate-500">{title}</p>
-      <p className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">{number(value)}</p>
-      <p className="mt-2 min-h-4 text-xs leading-snug text-slate-500">{subtitle}</p>
+
+      <p className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+        {number(value)}
+      </p>
+
+      <p className="mt-2 min-h-4 text-xs leading-snug text-slate-500">
+        {subtitle}
+      </p>
     </div>
+
   );
 }
 

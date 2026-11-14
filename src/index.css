@@ -16,10 +16,6 @@ textarea,
   font-family: "Segoe UI", Arial, sans-serif;
 }
 
-
-/* CSS PURO - Sem Tailwind para evitar erros de compilação */
-/* Isso garante que o visual "Wall" funcione sem travar o Vite */
-
 .leaflet-draw-tooltip {
     background-color: rgba(30, 58, 138, 0.9) !important; /* blue-900 */
     color: white !important;
