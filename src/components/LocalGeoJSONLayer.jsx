@@ -1348,298 +1348,324 @@ function ensurePresentationStyles() {
   const element = document.createElement("style");
 
   element.id = PRESENTATION_STYLE_ID;
-
+  
   element.textContent = `
 
-    /* Ícones temáticos dos pontos: sem imagem externa e sem alterar o GeoJSON. */
+    /* ÍCONES TEMÁTICOS DOS PONTOS */
 
     .leaflet-marker-icon.sobral-geojson-marker {
-
       background: transparent !important;
-
       border: 0 !important;
-
     }
 
     .sobral-geojson-point-icon {
-
       width: var(--sobral-pin-size);
-
       height: var(--sobral-pin-size);
-
       border: 2px solid #fff;
-
       border-radius: 50%;
-
       background: var(--sobral-pin-color);
-
       box-shadow: 0 3px 9px rgba(15, 23, 42, .28);
-
       display: flex;
-
       justify-content: center;
-
       align-items: center;
-
       color: #fff;
-
       box-sizing: border-box;
-
       transition: transform .15s ease, box-shadow .15s ease;
-
     }
 
-    .sobral-geojson-point-icon svg { display: block; flex-shrink: 0; }
+    .sobral-geojson-point-icon svg {
+      display: block;
+      flex-shrink: 0;
+    }
 
-    .leaflet-marker-icon.sobral-geojson-marker:hover .sobral-geojson-point-icon {
-
+    .leaflet-marker-icon.sobral-geojson-marker:hover
+    .sobral-geojson-point-icon {
       transform: scale(1.12);
-
       box-shadow: 0 5px 14px rgba(15, 23, 42, .35);
-
     }
 
-    /* Agrupamentos de pontos: indicam quantos estabelecimentos estão próximos. */
+    /* AGRUPAMENTOS DE PONTOS */
 
     .leaflet-marker-icon.sobral-geojson-cluster-icon {
-
       background: transparent !important;
-
       border: 0 !important;
-
     }
 
     .sobral-geojson-cluster-bubble {
-
       width: var(--sobral-cluster-size);
-
       height: var(--sobral-cluster-size);
-
       display: flex;
-
       align-items: center;
-
       justify-content: center;
-
       box-sizing: border-box;
-
       border: 3px solid #fff;
-
       border-radius: 50%;
-
       background: var(--sobral-cluster-color);
-
       color: white;
-
       font: 800 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
-
-      box-shadow: 0 3px 11px rgba(15, 23, 42, .3), 0 0 0 5px rgba(37, 99, 235, .15);
-
+      box-shadow: 0 3px 11px rgba(15, 23, 42, .3),
+                  0 0 0 5px rgba(37, 99, 235, .15);
       transition: transform .15s ease;
-
     }
 
-    .sobral-geojson-cluster-icon:hover .sobral-geojson-cluster-bubble {
-
+    .sobral-geojson-cluster-icon:hover
+    .sobral-geojson-cluster-bubble {
       transform: scale(1.09);
-
     }
+
+    /* TOOLTIPS DOS PONTOS */
 
     .leaflet-tooltip.sobral-geojson-point-tooltip {
-
       background: rgba(255, 255, 255, .98) !important;
-
       color: #1e40af !important;
-
       border: 1px solid #bfdbfe !important;
-
       border-radius: 9px !important;
-
       box-shadow: 0 4px 12px rgba(15, 23, 42, .18) !important;
-
       padding: 6px 10px !important;
-
       font: 700 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif !important;
-
       white-space: nowrap !important;
-
     }
 
-    /* Aparência original dos rótulos de bairros e outras geometrias. */
+    /* RÓTULOS DAS FEIÇÕES GEOJSON */
 
     .leaflet-tooltip.sobral-geojson-label {
-
       display: inline-block !important;
-
       width: max-content !important;
-
       min-width: max-content !important;
-
       max-width: none !important;
-
       white-space: nowrap !important;
-
       overflow-wrap: normal !important;
-
       word-break: normal !important;
-
       writing-mode: horizontal-tb !important;
-
       background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%) !important;
-
       color: #1e40af !important;
-
       border: 1px solid #bfdbfe !important;
-
       border-left: 4px solid #2563eb !important;
-
       padding: 9px 14px !important;
-
       border-radius: 12px !important;
-
       font: 800 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif !important;
-
       box-shadow: 0 4px 14px rgba(30, 64, 175, .16) !important;
-
       text-align: center !important;
-
       pointer-events: none !important;
-
     }
 
-    .leaflet-tooltip.sobral-geojson-label::before { display: none !important; }
+    .leaflet-tooltip.sobral-geojson-label::before {
+      display: none !important;
+    }
 
-    .leaflet-popup.sobral-geojson-popup .leaflet-popup-content-wrapper {
+    /* POPUPS GEOJSON - JANELA PRINCIPAL */
 
+    .leaflet-popup.sobral-geojson-popup
+    .leaflet-popup-content-wrapper {
       padding: 0 !important;
-
       overflow: hidden;
-
       border-radius: 19px;
-
       background: #fff;
-
       box-shadow: 0 16px 45px rgba(15, 23, 42, .24);
-
     }
 
-    .leaflet-popup.sobral-geojson-popup .leaflet-popup-content {
-
+    .leaflet-popup.sobral-geojson-popup
+    .leaflet-popup-content {
       margin: 0 !important;
-
       width: 310px !important;
-
       max-width: calc(100vw - 60px) !important;
-
     }
 
-    .leaflet-popup.sobral-geojson-popup .leaflet-popup-tip { background: white; }
+    .leaflet-popup.sobral-geojson-popup
+    .leaflet-popup-tip {
+      background: white;
+    }
 
-    .leaflet-popup.sobral-geojson-popup .leaflet-popup-close-button {
-
+    .leaflet-popup.sobral-geojson-popup
+    .leaflet-popup-close-button {
       z-index: 2;
-
       top: 9px !important;
-
       right: 10px !important;
-
       color: white !important;
-
-      background: rgba(255,255,255,.16);
-
+      background: rgba(255, 255, 255, .16);
       border-radius: 50%;
-
       width: 27px !important;
-
       height: 27px !important;
-
       line-height: 24px !important;
-
       text-align: center;
-
     }
 
-    .sobral-feature-card { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; }
+    /* CARD INTERNO - ALTURA MÁXIMA E ROLAGEM */
+
+    .leaflet-popup.sobral-geojson-popup
+    .sobral-feature-card {
+      display: flex;
+      flex-direction: column;
+      max-height: min(410px, calc(100dvh - 160px));
+      min-height: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #0f172a;
+    }
+
+    /* CABEÇALHO FIXO */
 
     .sobral-feature-card-head {
-
+      flex: 0 0 auto;
       background: linear-gradient(125deg, #1d4ed8 0%, #1e40af 95%);
-
       color: #fff;
-
       padding: 16px 44px 17px 18px;
-
     }
 
     .sobral-feature-card-tag {
-
-      display: inline-block; border: 1px solid rgba(255,255,255,.25);
-
-      background: rgba(255,255,255,.13); border-radius: 30px;
-
-      padding: 3px 9px; font-size: 10px; font-weight: 800;
-
-      text-transform: uppercase; letter-spacing: .065em; margin-bottom: 9px;
-
+      display: inline-block;
+      border: 1px solid rgba(255, 255, 255, .25);
+      background: rgba(255, 255, 255, .13);
+      border-radius: 30px;
+      padding: 3px 9px;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .065em;
+      margin-bottom: 9px;
     }
 
-    .sobral-feature-card-title { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.32; }
+    .sobral-feature-card-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.32;
+      overflow-wrap: anywhere;
+    }
 
-    .sobral-feature-card-body { padding: 15px 16px 17px; }
+    /* CONTEÚDO ROLÁVEL DO POPUP */
 
-    /* Descrição com hierarquia visual, sem alterar o restante do popup. */
+    .leaflet-popup.sobral-geojson-popup
+    .sobral-feature-card-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      padding: 15px 16px 17px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 transparent;
+    }
+
+    /* BARRA DE ROLAGEM DISCRETA */
+
+    .leaflet-popup.sobral-geojson-popup
+    .sobral-feature-card-body::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    .leaflet-popup.sobral-geojson-popup
+    .sobral-feature-card-body::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+
+    .leaflet-popup.sobral-geojson-popup
+    .sobral-feature-card-body::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    /* DESCRIÇÃO */
 
     .sobral-feature-description-box {
-
       padding: 12px 13px;
-
       margin: 0 0 14px;
-
       border-left: 3px solid #2563eb;
-
       border-radius: 9px;
-
       background: #f8fafc;
-
     }
 
     .sobral-feature-description-label {
-
       margin: 0 0 5px;
-
       color: #1d4ed8;
-
       font-size: 10px;
-
       font-weight: 800;
-
       letter-spacing: .055em;
-
       text-transform: uppercase;
-
     }
 
-    .sobral-feature-description { color:#334155; line-height:1.65; margin: 0; font-size: 13px; overflow-wrap: break-word; }
+    .sobral-feature-description {
+      color: #334155;
+      line-height: 1.65;
+      margin: 0;
+      font-size: 13px;
+      overflow-wrap: break-word;
+    }
 
-    .sobral-feature-metrics { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; margin: 0 0 13px; }
+    /* MEDIDAS DAS FEIÇÕES */
 
-    .sobral-feature-metric { background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px; border-radius: 11px; min-width: 0; }
+    .sobral-feature-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+      margin: 0 0 13px;
+    }
 
-    .sobral-feature-metric-label { color: #1d4ed8; font-size: 10px; font-weight: 800; text-transform: uppercase; margin-bottom: 5px; }
+    .sobral-feature-metric {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 10px;
+      border-radius: 11px;
+      min-width: 0;
+    }
 
-    .sobral-feature-metric-value { color: #0f172a; font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
+    .sobral-feature-metric-label {
+      color: #1d4ed8;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
 
-    .sobral-feature-details { border: 1px solid #e2e8f0; border-radius: 11px; overflow: hidden; }
+    .sobral-feature-metric-value {
+      color: #0f172a;
+      font-size: 15px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
 
-    .sobral-feature-details-heading { font-size: 11px; font-weight: 800; padding: 9px 11px; color: #1d4ed8; background: #f8fafc; }
+    /* INFORMAÇÕES ADICIONAIS */
 
-    .sobral-feature-detail { display: flex; justify-content: space-between; gap: 12px; padding: 9px 11px; border-top: 1px solid #f1f5f9; font-size: 12px; }
+    .sobral-feature-details {
+      border: 1px solid #e2e8f0;
+      border-radius: 11px;
+      overflow: hidden;
+    }
 
-    .sobral-feature-detail strong { color: #475569; flex: 0 0 43%; min-width: 0; overflow-wrap: anywhere; }
+    .sobral-feature-details-heading {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 9px 11px;
+      color: #1d4ed8;
+      background: #f8fafc;
+    }
 
-    .sobral-feature-detail span { color: #0f172a; flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+    .sobral-feature-detail {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 11px;
+      border-top: 1px solid #f1f5f9;
+      font-size: 12px;
+    }
+
+    .sobral-feature-detail strong {
+      color: #475569;
+      flex: 0 0 43%;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .sobral-feature-detail span {
+      color: #0f172a;
+      flex: 1;
+      min-width: 0;
+      text-align: right;
+      overflow-wrap: anywhere;
+    }
 
   `;
+
+
 
   document.head.appendChild(element);
 
