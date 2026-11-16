@@ -204,7 +204,7 @@ export default function About() {
             src="/images/sobral-hero.png"
             alt="Vista da cidade de Sobral"
             onError={() => setHeroImageError(true)}
-            className="absolute inset-0 -z-20 h-full w-full object-cover opacity-40"
+            className="absolute inset-0 -z-20 h-full w-full object-cover opacity-70"
           />
         )}
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-blue-950/95 via-blue-950/85 to-blue-800/70" />
