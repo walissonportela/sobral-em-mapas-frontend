@@ -1472,7 +1472,7 @@ function SingleFeatureMarker({ item, layer, showPermanentName }) {
       className: "sobral-geojson-popup",
     });
     if (name) {
-      marker.bindTooltip(String(name), {
+      marker.bindTooltip(domElement("span", "", name), {
         permanent: showPermanentName,
         direction: "top",
         className: "sobral-geojson-point-tooltip",
@@ -1665,7 +1665,7 @@ export default function LocalGeoJSONLayer({ layer, viewSettings = {} }) {
             // Abaixo do zoom mínimo não cria nem tooltip de hover.
             // Popups e geometrias continuam disponíveis normalmente.
             if (name && showDetails) {
-              leafletLayer.bindTooltip(String(name), {
+              leafletLayer.bindTooltip(domElement("span", "", name), {
                 permanent: labelLayout.showShapeLabel(name, geometryType, leafletLayer),
                 direction: "center",
                 className: "sobral-geojson-label",
