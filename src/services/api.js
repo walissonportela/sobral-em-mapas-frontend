@@ -40,7 +40,10 @@ api.interceptors.response.use(
     const path = String(error?.config?.url || "");
     const authorizedRequest = !path.startsWith("/login") &&
       Boolean(error?.config?.headers?.Authorization);
-    if (error?.response?.status === 401 && authorizedRequest) {
+    const currentToken = localStorage.getItem("admin_token");
+    const sameSession = currentToken &&
+      error?.config?.headers?.Authorization === `Bearer ${currentToken}`;
+    if (error?.response?.status === 401 && authorizedRequest && sameSession) {
       window.dispatchEvent(new Event("sobral-auth-expired"));
     }
     return Promise.reject(error);
