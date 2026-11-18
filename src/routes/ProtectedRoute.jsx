@@ -1,33 +1,24 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-export default function ProtectedRoute({
-  children,
-  roles = [],
-}) {
-  const { user } = useAuth();
+export default function ProtectedRoute({ children, roles = [] }) {
+  const { user, authReady } = useAuth();
 
-  if (!user) {
+  // Não exibe o painel até revalidar a sessão no Laravel.
+  if (!authReady) {
     return (
-      <Navigate
-        to="/"
-        replace
-      />
+      <div className="flex min-h-[60vh] items-center justify-center text-sm text-slate-600" role="status">
+        Validando sua sessão...
+      </div>
     );
   }
 
-  const userRole = user?.profile?.nome;
+  if (!user || user.approved === false) {
+    return <Navigate to="/" replace />;
+  }
 
-  if (
-    roles.length > 0 &&
-    !roles.includes(userRole)
-  ) {
-    return (
-      <Navigate
-        to="/"
-        replace
-      />
-    );
+  if (roles.length > 0 && !roles.includes(user?.profile?.nome)) {
+    return <Navigate to="/" replace />;
   }
 
   return children;
