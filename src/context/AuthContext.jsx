@@ -41,11 +41,12 @@ export function AuthProvider({ children }) {
         if (active) setAuthReady(true);
         return;
       }
+      const sessionToken = localStorage.getItem("admin_token");
       try {
         // Perfil e status de aprovação são validados no backend;
         // dados de usuário guardados no navegador não são uma autorização.
         const response = await api.get("/me", { timeout: 10000 });
-        if (!active) return;
+        if (!active || localStorage.getItem("admin_token") !== sessionToken) return;
         if (response.data?.user?.approved === false) {
           onExpired();
           return;
@@ -58,7 +59,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem("user_data", JSON.stringify(verifiedUser));
         setUser(verifiedUser);
       } catch (error) {
-        if (!active) return;
+        if (!active || localStorage.getItem("admin_token") !== sessionToken) return;
         if ([401, 403].includes(error?.response?.status)) {
           onExpired();
         }
