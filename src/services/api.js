@@ -21,7 +21,10 @@ api.interceptors.request.use((config) => {
     return Promise.reject(new Error("Destino da API não autorizado."));
   }
 
-  const token = localStorage.getItem("admin_token");
+  // Evita enviar o Bearer token em buscas, mapas e integrações públicas.
+  const route = String(config.url || "");
+  const requiresAuth = /^\/(?:admin(?:\/|$)|me(?:\?|$)|logout(?:\?|$))/.test(route);
+  const token = requiresAuth ? localStorage.getItem("admin_token") : null;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -34,7 +37,9 @@ api.interceptors.response.use(
   (error) => {
     // Só revoga a sessão local se uma chamada autenticada retornar 401.
     // Um 401 vindo do login (credenciais incorretas) não altera a sessão.
-    const authorizedRequest = Boolean(error?.config?.headers?.Authorization);
+    const path = String(error?.config?.url || "");
+    const authorizedRequest = !path.startsWith("/login") &&
+      Boolean(error?.config?.headers?.Authorization);
     if (error?.response?.status === 401 && authorizedRequest) {
       window.dispatchEvent(new Event("sobral-auth-expired"));
     }
