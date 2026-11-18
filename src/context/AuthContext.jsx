@@ -84,7 +84,15 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    // O componente Header já faz a tentativa de revogação no backend.
+    const token = localStorage.getItem("admin_token");
+    // A revogação no backend é tentada com o token capturado antes
+    // da remoção local. Mesmo offline, o navegador encerra a sessão.
+    if (token) {
+      void api.post("/logout", null, {
+        timeout: 5000,
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
     clearCredentials();
     setUser(null);
     setAuthReady(true);
