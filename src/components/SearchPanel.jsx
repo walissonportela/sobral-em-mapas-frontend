@@ -8,10 +8,8 @@ import {
   Loader2,
   MapPin,
   Search,
-  Trash2,
   X,
 } from "lucide-react";
-
 const HISTORY_KEY = "sobral_recent_searches";
 const GEOCODER_URL =
   import.meta.env.VITE_GEOCODER_URL ||
@@ -20,7 +18,6 @@ const API_BASE_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:8080/api"
 ).replace(/\/$/, "");
 const SOBRAL_VIEWBOX = "-40.45,-3.60,-40.25,-3.78";
-
 // O autocompletar usa APENAS os arquivos GeoJSON da própria plataforma.
 // O Nominatim público é consultado somente por ação explícita (Buscar / Enter).
 const GEOJSON_URL_PATTERN = /^\/(?:api\/)?geodata\/[A-Za-z0-9_-]+\.geojson$/;
@@ -29,7 +26,6 @@ const MAX_GEOJSON_BYTES = 2_500_000;
 const MAX_FILES_TO_INDEX = 24;
 const MAX_NAMES_PER_FILE = 1800;
 const MAX_SUGGESTIONS = 7;
-
 const NAME_KEYS = [
   "nome", "name", "title", "nome_fantasia", "nomefantasia",
   "denominacao", "denominação", "nm_bairro", "bairro", "nm_distrito",
@@ -42,18 +38,24 @@ function normalize(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
+    .replace(/\s+/g, " ")
     .toLowerCase();
 }
 
 function loadRecentSearches() {
   try {
     const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-    return Array.isArray(saved)
-      ? saved.filter((item) =>
-          Number.isFinite(Number(item.lat)) &&
-          Number.isFinite(Number(item.lon))
-        ).slice(0, 5)
-      : [];
+    if (!Array.isArray(saved)) return [];
+    const seen = new Set();
+    return saved.filter((item) => {
+      if (!Number.isFinite(Number(item?.lat)) || !Number.isFinite(Number(item?.lon))) {
+        return false;
+      }
+      const key = getPlaceKey(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 5);
   } catch {
     return [];
   }
@@ -69,10 +71,23 @@ function parseCoordinates(value) {
   const lon = Number(match[2]);
   return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
 }
+// Identidade visual: ruas repetidas em vários trechos são uma sugestão só.
+// Locais pontuais homônimos continuam separados por suas coordenadas.
+
+function getSearchIdentity(item) {
+  const name = normalize(item.featureName || getPlaceTitle(item));
+  const type = item.geometryType || "";
+  // Compatibilidade com o histórico antigo, salvo antes da classificação geométrica.
+  const legacyRoad = !type && /sistema vi[aá]rio|vias|ruas|avenidas|rodovias/i.test(item.layerName || "");
+  const isLine = ["LineString", "MultiLineString"].includes(type) || legacyRoad;
+  if (isLine) return `via:${name}`;
+  return `local:${name}:${Number(item.lat).toFixed(4)}:${Number(item.lon).toFixed(4)}`;
+}
 
 function getPlaceKey(item) {
-  if (item.osm_type && item.osm_id) return `${item.osm_type}:${item.osm_id}`;
-  return String(item.place_id || `${item.lat},${item.lon}`);
+  if (item?.kind === "geojson") return getSearchIdentity(item);
+  if (item?.osm_type && item?.osm_id) return `${item.osm_type}:${item.osm_id}`;
+  return String(item?.place_id || `${item?.lat},${item?.lon}`);
 }
 
 function getPlaceTitle(item) {
@@ -82,13 +97,123 @@ function getPlaceTitle(item) {
     .split(",")[0].trim();
 }
 
+// Identifica o que é cada resultado a partir da geometria, dos atributos
+// cadastrais e do nome da camada. Não presume que todo trecho é uma rua.
+function getPlaceType(item) {
+  if (item.kind === "coordinates") return "Coordenadas";
+  if (item.kind !== "geojson") return "Endereço";
+  if (item.placeType) return item.placeType;
+
+  // Fallback para entradas antigas que já estão no histórico local.
+  const hint = normalize(`${item.layerName || ""} ${item.subcategoryName || ""}`);
+  const geometryType = item.geometryType || "";
+  if (/bairro/.test(hint)) return "Bairro";
+  if (/distrit/.test(hint)) return "Distrito";
+  if (/universid|faculdade/.test(hint)) return "Ensino superior";
+  if (/escol|ensino|educac/.test(hint)) return "Instituição de ensino";
+  if (/hospital/.test(hint)) return "Hospital";
+  if (/saude|clinica|ubs|psf/.test(hint)) return "Unidade de saúde";
+  if (/praca/.test(hint)) return "Praça";
+  if (/parque/.test(hint)) return "Parque";
+  if (/sistema viario|\bvias\b|logradouro|rodovia|ruas|avenidas/.test(hint)) return "Via";
+  if (["LineString", "MultiLineString"].includes(geometryType)) return "Linha";
+  if (["Polygon", "MultiPolygon"].includes(geometryType)) return "Área";
+  return "Local";
+}
+
+// Exibe o endereço apenas quando está registrado no GeoJSON.
+// Sem essa informação, oferece uma descrição do tipo de feição,
+// evitando apresentar uma rua ou um bairro que não foram verificados.
+function getPlaceContext(item) {
+  if (item.kind !== "geojson") return getPlaceSubtitle(item);
+  if (item.addressDetail) return item.addressDetail;
+  const type = getPlaceType(item);
+  const generic = {
+    Via: "Trecho da rede viária",
+    Bairro: "Área do bairro",
+    Distrito: "Área do distrito",
+    Linha: "Traçado cartográfico",
+    Área: "Área mapeada",
+  };
+  return generic[type] || `${type} no mapa de Sobral`;
+}
+
 function getPlaceSubtitle(item) {
   if (item.kind === "coordinates") {
     return `${Number(item.lat).toFixed(5)}, ${Number(item.lon).toFixed(5)}`;
   }
-  if (item.kind === "geojson") return `Camada: ${item.layerName}`;
+  if (item.kind === "geojson") {
+    return `${getPlaceType(item)} · ${getPlaceContext(item)} · Camada: ${item.layerName}`;
+  }
   return String(item.display_name || "")
     .split(",").slice(1).join(",").trim() || "Local encontrado";
+}
+
+// Suporta propriedades do OpenStreetMap e campos mais comuns dos dados
+// municipais: tanto no nível principal quanto dentro de properties.tags.
+function getFeatureAttribute(properties, keys) {
+  const tags = properties?.tags && typeof properties.tags === "object" && !Array.isArray(properties.tags)
+    ? properties.tags : {};
+  for (const source of [properties || {}, tags]) {
+    const values = new Map(Object.entries(source).map(([key, value]) => [normalize(key), value]));
+    for (const key of keys) {
+      const value = values.get(normalize(key));
+      if (typeof value !== "string" && typeof value !== "number") continue;
+      const result = String(value).trim();
+      if (result && !/^(null|undefined|sem informação|sem informacao|n\/a)$/i.test(result)) return result;
+    }
+  }
+  return "";
+}
+
+function getFeaturePlaceType(feature, layer) {
+  const properties = feature?.properties || {};
+  const amenity = normalize(getFeatureAttribute(properties, ["amenity", "tipo"]));
+  const healthcare = normalize(getFeatureAttribute(properties, ["healthcare"]));
+  const hint = normalize(`${layer?.name || ""} ${layer?.subcategory?.name || ""}`);
+  const geometryType = feature?.geometry?.type || "";
+
+  if (/bairro/.test(hint)) return "Bairro";
+  if (/distrit/.test(hint)) return "Distrito";
+  if (/sistema viario|\bvias\b|logradouro|rodovia|ruas|avenidas/.test(hint)) return "Via";
+  if (amenity === "university" || amenity === "college" || /universid|faculdade/.test(hint)) return "Ensino superior";
+  if (["school", "kindergarten"].includes(amenity) || /escol|ensino|educac/.test(hint)) return "Instituição de ensino";
+  if (amenity === "hospital" || healthcare === "hospital" || /hospital/.test(hint)) return "Hospital";
+  if (amenity === "clinic" || healthcare === "clinic" || /cl[ií]nica/.test(hint)) return "Clínica";
+  if (amenity === "pharmacy" || /farmacia|farmácia/.test(hint)) return "Farmácia";
+  if (/saude|saúde|ubs|psf/.test(hint)) return "Unidade de saúde";
+  if (/praca|praça/.test(hint)) return "Praça";
+  if (/parque/.test(hint)) return "Parque";
+  if (["LineString", "MultiLineString"].includes(geometryType)) return "Linha";
+  if (["Polygon", "MultiPolygon"].includes(geometryType)) return "Área";
+  return "Local";
+}
+
+function getFeatureAddress(feature, featureName) {
+  const properties = feature?.properties || {};
+  const street = getFeatureAttribute(properties, [
+    "addr:street", "addr_street", "logradouro", "nome_logradouro", "nm_logradouro",
+    "ds_logradouro", "rua", "endereco", "endereço", "street",
+  ]);
+  const number = getFeatureAttribute(properties, ["addr:housenumber", "numero", "número", "num_imovel"]);
+  const neighborhood = getFeatureAttribute(properties, [
+    "addr:suburb", "addr:neighbourhood", "bairro", "nome_bairro", "nm_bairro", "bairro_nome",
+  ]);
+  const district = getFeatureAttribute(properties, ["addr:district", "distrito", "nm_distrito"]);
+  const parts = [];
+  // Não repete o título do resultado como se fosse informação adicional.
+  if (street && normalize(street) !== normalize(featureName)) {
+    parts.push(number ? `${street}, ${number}` : street);
+  } else if (street && number) {
+    parts.push(`Nº ${number}`);
+  }
+  if (neighborhood && normalize(neighborhood) !== normalize(featureName)) {
+    parts.push(`Bairro ${neighborhood}`);
+  }
+  if (district && normalize(district) !== normalize(featureName) && normalize(district) !== normalize(neighborhood)) {
+    parts.push(`Distrito ${district}`);
+  }
+  return parts.join(" · ");
 }
 
 function getGeojsonUrl(layer) {
@@ -140,7 +265,6 @@ function coordinatesCenter(geometry) {
     }
     return null;
   }
-
   let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
   let count = 0;
   const walk = (coords) => {
@@ -168,31 +292,102 @@ function coordinatesCenter(geometry) {
   }
   return count ? { lat: (minLat + maxLat) / 2, lon: (minLon + maxLon) / 2 } : null;
 }
+// Estima a extensão de vias para manter o trecho mais representativo
+// quando o GeoJSON divide uma rua em várias feições.
+
+function lineLength(geometry) {
+  if (!geometry || !["LineString", "MultiLineString"].includes(geometry.type)) return 0;
+  const lines = geometry.type === "LineString"
+    ? [geometry.coordinates]
+    : geometry.coordinates;
+  if (!Array.isArray(lines)) return 0;
+  let length = 0;
+  for (const line of lines) {
+    if (!Array.isArray(line)) continue;
+    for (let i = 1; i < line.length; i++) {
+      const previous = line[i - 1];
+      const current = line[i];
+      if (!Array.isArray(previous) || !Array.isArray(current)) continue;
+      const lat = (Number(previous[1]) + Number(current[1])) / 2;
+      const dx = (Number(current[0]) - Number(previous[0])) * Math.cos(lat * Math.PI / 180);
+      const dy = Number(current[1]) - Number(previous[1]);
+      const segment = Math.hypot(dx, dy);
+      if (Number.isFinite(segment)) length += segment;
+    }
+  }
+  return length;
+}
+
+// Para vias, escolhe um ponto situado sobre a geometria, evitando que
+// o marcador de pesquisa caia fora da rua quando ela faz curvas.
+function lineRepresentativePoint(geometry) {
+  if (!geometry || !["LineString", "MultiLineString"].includes(geometry.type)) return null;
+  const lines = geometry.type === "LineString" ? [geometry.coordinates] : geometry.coordinates;
+  if (!Array.isArray(lines)) return null;
+  let best = null;
+  let bestDistance = 0;
+  for (const line of lines) {
+    if (!Array.isArray(line)) continue;
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1];
+      const b = line[i];
+      if (!Array.isArray(a) || !Array.isArray(b)) continue;
+      const lat1 = Number(a[1]);
+      const lon1 = Number(a[0]);
+      const lat2 = Number(b[1]);
+      const lon2 = Number(b[0]);
+      if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) continue;
+      const dx = (lon2 - lon1) * Math.cos(((lat1 + lat2) / 2) * Math.PI / 180);
+      const distance = Math.hypot(dx, lat2 - lat1);
+      if (distance > bestDistance) {
+        bestDistance = distance;
+        best = { lat: (lat1 + lat2) / 2, lon: (lon1 + lon2) / 2 };
+      }
+    }
+  }
+  return best;
+}
 
 function extractPlaces(geojson, layer) {
   const features = geojson?.type === "FeatureCollection"
     ? geojson.features
     : geojson?.type === "Feature" ? [geojson] : [];
   if (!Array.isArray(features)) return [];
-
   const places = [];
-  const dedupe = new Set();
+  const dedupe = new Map();
   for (const [index, feature] of features.entries()) {
     const name = getFeatureName(feature?.properties);
     if (!name) continue;
-    const point = coordinatesCenter(feature.geometry);
+    const geometryType = feature.geometry?.type || "";
+    const point = lineRepresentativePoint(feature.geometry) || coordinatesCenter(feature.geometry);
     if (!point) continue;
-    const key = `${normalize(name)}:${point.lat.toFixed(5)}:${point.lon.toFixed(5)}`;
-    if (dedupe.has(key)) continue;
-    dedupe.add(key);
-    places.push({
+
+    const length = lineLength(feature.geometry);
+    const candidate = {
       kind: "geojson",
       place_id: `geojson:${layer.id}:${index}`,
       featureName: name,
       layerName: String(layer.name || "Mapa municipal"),
+      subcategoryName: String(layer.subcategory?.name || ""),
+      placeType: getFeaturePlaceType(feature, layer),
+      addressDetail: getFeatureAddress(feature, name),
+      geometryType,
+      segmentLength: length,
       display_name: `${name}, ${layer.name || "Sobral"}`,
       ...point,
-    });
+    };
+    const key = getSearchIdentity(candidate);
+    const existingIndex = dedupe.get(key);
+    if (existingIndex !== undefined) {
+      // Nomes de vias repetidos não geram novas sugestões. A localização
+      // privilegia um trecho mais comprido, em vez de uma ponta arbitrária.
+      if (length > places[existingIndex].segmentLength) {
+        places[existingIndex] = candidate;
+      }
+      continue;
+    }
+    dedupe.set(key, places.length);
+    places.push(candidate);
     if (places.length >= MAX_NAMES_PER_FILE) break;
   }
   return places;
@@ -203,7 +398,6 @@ async function fetchGeojsonPlaces(layer, signal) {
   if (!url) return [];
   // Cache em memória evita baixar novamente ao alternar abas da Sidebar.
   if (GEOJSON_CACHE.has(url)) return GEOJSON_CACHE.get(url);
-
   const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`GeoJSON indisponível (${response.status})`);
   const contentLength = Number(response.headers.get("content-length"));
@@ -211,7 +405,6 @@ async function fetchGeojsonPlaces(layer, signal) {
     await response.body?.cancel?.();
     return [];
   }
-
   let content = "";
   if (response.body?.getReader) {
     const reader = response.body.getReader();
@@ -250,13 +443,11 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
   const [indexProgress, setIndexProgress] = useState({ done: 0, total: 0 });
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
-
   const requestRef = useRef(null);
   const lastRequestAtRef = useRef(0);
   const geocoderCacheRef = useRef(new Map());
   const inputRef = useRef(null);
   const wrapperRef = useRef(null);
-
   const eligibleLayers = useMemo(() => {
     const activeIds = new Set(activeLayers.map((layer) => String(layer.id)));
     const unique = new Map();
@@ -269,7 +460,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
       .sort((a, b) => layerPriority(b, activeIds) - layerPriority(a, activeIds))
       .slice(0, MAX_FILES_TO_INDEX);
   }, [layers, activeLayers]);
-
   // Índice local progressivo, apenas enquanto a aba Buscar Local estiver aberta.
   // A consulta remota ao Nominatim NÃO é usada no autocompletar.
   useEffect(() => {
@@ -278,7 +468,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
     let cursor = 0;
     let done = 0;
     const total = eligibleLayers.length;
-
     const work = async () => {
       while (!controller.signal.aborted) {
         const index = cursor++;
@@ -286,7 +475,7 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
         try {
           const items = await fetchGeojsonPlaces(eligibleLayers[index], controller.signal);
           if (controller.signal.aborted) return;
-          accumulated.push(...items);
+          accumulated.push(...items.map((place) => ({ ...place, sourceRank: index })));
           setLocalPlaces([...accumulated]);
         } catch (cause) {
           if (controller.signal.aborted) return;
@@ -299,11 +488,9 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
         }
       }
     };
-
     void Promise.all([work(), work()]);
     return () => controller.abort();
   }, [eligibleLayers]);
-
   useEffect(() => {
     try {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(recentSearches));
@@ -311,9 +498,7 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
       // O histórico é opcional (ex.: modo de navegação privada).
     }
   }, [recentSearches]);
-
   useEffect(() => () => requestRef.current?.abort(), []);
-
   useEffect(() => {
     const closeOutside = (event) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
@@ -323,26 +508,40 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
     document.addEventListener("pointerdown", closeOutside);
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
-
   const term = normalize(query);
   const localSuggestions = useMemo(() => {
     if (term.length < 2 || parseCoordinates(query)) return [];
-    const hits = localPlaces
-      .filter((place) => normalize(place.featureName).includes(term))
-      .sort((a, b) => {
-        const aStart = normalize(a.featureName).startsWith(term) ? 0 : 1;
-        const bStart = normalize(b.featureName).startsWith(term) ? 0 : 1;
-        return aStart - bStart || a.featureName.localeCompare(b.featureName, "pt-BR");
-      });
-    return hits.slice(0, MAX_SUGGESTIONS);
+    const distinct = new Map();
+    for (const place of localPlaces) {
+      if (!normalize(place.featureName).includes(term)) continue;
+      const key = getSearchIdentity(place);
+      const previous = distinct.get(key);
+      // Prefere a camada priorizada pelo painel, independentemente da
+      // ordem em que os downloads paralelos foram finalizados.
+      if (!previous || (place.sourceRank ?? Infinity) < (previous.sourceRank ?? Infinity)) {
+        distinct.set(key, place);
+      }
+    }
+    return [...distinct.values()].sort((a, b) => {
+      const aStart = normalize(a.featureName).startsWith(term) ? 0 : 1;
+      const bStart = normalize(b.featureName).startsWith(term) ? 0 : 1;
+      return aStart - bStart ||
+        a.featureName.localeCompare(b.featureName, "pt-BR") ||
+        (a.sourceRank ?? Infinity) - (b.sourceRank ?? Infinity);
+    }).slice(0, MAX_SUGGESTIONS);
   }, [localPlaces, query, term]);
-
   const visibleRecent = useMemo(() => {
-    return recentSearches.filter((item) =>
-      !term || normalize(`${getPlaceTitle(item)} ${getPlaceSubtitle(item)}`).includes(term)
-    ).slice(0, term ? 3 : 5);
-  }, [recentSearches, term]);
-
+    // Não repete no histórico uma sugestão já exibida na seção de locais.
+    const visibleKeys = new Set(term.length >= 2 ? localSuggestions.map(getPlaceKey) : []);
+    const seen = new Set();
+    return recentSearches.filter((item) => {
+      if (term && !normalize(`${getPlaceTitle(item)} ${getPlaceSubtitle(item)}`).includes(term)) return false;
+      const key = getPlaceKey(item);
+      if (visibleKeys.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, term ? 3 : 5);
+  }, [recentSearches, term, localSuggestions]);
   const showQuickMenu = showSuggestions &&
     (term.length >= 2 || (!term && visibleRecent.length > 0));
   const quickOptions = term.length >= 2
@@ -350,7 +549,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
     : visibleRecent;
   const stillIndexing = eligibleLayers.length > 0 &&
     indexProgress.done < eligibleLayers.length;
-
   const saveRecent = (item) => {
     const key = getPlaceKey(item);
     setRecentSearches((previous) => [
@@ -358,13 +556,13 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
       ...previous.filter((previousItem) => getPlaceKey(previousItem) !== key),
     ].slice(0, 5));
   };
-
   const selectLocation = (item) => {
     const lat = Number(item.lat);
     const lon = Number(item.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-
-    onSearch?.({ lat, lon, name: getPlaceTitle(item) });
+    const title = getPlaceTitle(item);
+    const mapTitle = item.kind === "geojson" ? `${getPlaceType(item)}: ${title}` : title;
+    onSearch?.({ lat, lon, name: mapTitle });
     saveRecent(item);
     setSelected(item);
     setQuery(getPlaceTitle(item));
@@ -374,7 +572,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
     setShowSuggestions(false);
     setActiveSuggestion(-1);
   };
-
   const resetSearch = () => {
     requestRef.current?.abort();
     setLoading(false);
@@ -388,7 +585,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
     onSearch?.(null);
     inputRef.current?.focus();
   };
-
   const handleChange = (value) => {
     requestRef.current?.abort();
     setLoading(false);
@@ -400,7 +596,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
     setShowSuggestions(true);
     setActiveSuggestion(-1);
   };
-
   const handleInputKeyDown = (event) => {
     if (event.key === "Escape") {
       setShowSuggestions(false);
@@ -422,7 +617,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
       selectLocation(quickOptions[activeSuggestion]);
     }
   };
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     const value = query.trim();
@@ -460,7 +654,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
       setError("Aguarde um instante antes de fazer outra pesquisa.");
       return;
     }
-
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
@@ -470,7 +663,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
     setSelected(null);
     setResults([]);
     setError("");
-
     const fullQuery = scope === "sobral" && !/\bsobral\b/i.test(value)
       ? `${value}, Sobral, Ceará, Brasil` : value;
     const params = new URLSearchParams({
@@ -485,7 +677,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
       params.set("viewbox", SOBRAL_VIEWBOX);
       params.set("bounded", "0");
     }
-
     try {
       const response = await fetch(`${GEOCODER_URL}?${params}`, {
         signal: controller.signal,
@@ -514,7 +705,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
       }
     }
   };
-
   return (
     <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 p-4 md:p-5" ref={wrapperRef}>
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -550,7 +740,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
             </button>
           )}
         </div>
-
         {showQuickMenu && (
           <section
             id="sobral-quick-suggestions"
@@ -576,8 +765,12 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
                       >
                         <MapPin size={16} className="mt-0.5 shrink-0 text-blue-600" />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-semibold text-slate-800">{place.featureName}</span>
-                          <span className="mt-0.5 block truncate text-[11px] text-slate-500">{getPlaceSubtitle(place)}</span>
+                          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span className="min-w-0 truncate text-xs font-semibold text-slate-800" title={place.featureName}>{place.featureName}</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-blue-700">{getPlaceType(place)}</span>
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-slate-600" title={getPlaceContext(place)}>{getPlaceContext(place)}</span>
+                          <span className="mt-0.5 block truncate text-[10px] text-slate-400" title={place.layerName}>Camada: {place.layerName}</span>
                         </span>
                       </button>
                     ))}
@@ -615,7 +808,14 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
                     <Clock3 size={15} className="mt-0.5 shrink-0 text-slate-400" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-semibold text-slate-700">{getPlaceTitle(place)}</span>
-                      <span className="mt-0.5 block truncate text-[11px] text-slate-500">{getPlaceSubtitle(place)}</span>
+                      {place.kind === "geojson" ? (
+                        <>
+                          <span className="mt-0.5 block truncate text-[11px] text-slate-600">{getPlaceType(place)} · {getPlaceContext(place)}</span>
+                          <span className="mt-0.5 block truncate text-[10px] text-slate-400">Camada: {place.layerName}</span>
+                        </>
+                      ) : (
+                        <span className="mt-0.5 block truncate text-[11px] text-slate-500">{getPlaceSubtitle(place)}</span>
+                      )}
                     </span>
                   </button>
                 ))}
@@ -623,7 +823,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
             )}
           </section>
         )}
-
         <div className="flex items-center justify-between gap-2 text-xs">
           <label className="flex cursor-pointer items-center gap-2 text-slate-600">
             <input
@@ -644,7 +843,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
           </label>
           <span className="text-[11px] text-slate-400">Brasil</span>
         </div>
-
         <button
           type="submit"
           disabled={loading}
@@ -659,27 +857,32 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
           Coordenadas: -3.6892, -40.3489.
         </p>
       </form>
-
       {error && (
         <div role="alert" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
           <AlertCircle size={17} className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
-
       {selected && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
           <div className="flex items-center gap-2 text-xs font-bold text-blue-800">
             <CheckCircle2 size={16} /> Local localizado no mapa
           </div>
           <p className="mt-2 text-sm font-semibold text-slate-800">{getPlaceTitle(selected)}</p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-600">{getPlaceSubtitle(selected)}</p>
+          {selected.kind === "geojson" ? (
+              <>
+                <p className="mt-1 text-xs font-semibold text-blue-700">{getPlaceType(selected)}</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-600">{getPlaceContext(selected)}</p>
+                <p className="mt-1 text-[11px] text-slate-500">Camada: {selected.layerName}</p>
+              </>
+            ) : (
+              <p className="mt-1 text-xs leading-relaxed text-slate-600">{getPlaceSubtitle(selected)}</p>
+            )}
           <button type="button" onClick={resetSearch} className="mt-3 text-xs font-bold text-blue-700 hover:underline">
             Fazer outra pesquisa
           </button>
         </div>
       )}
-
       {searched && (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-label="Resultados da pesquisa">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2.5">
@@ -714,7 +917,6 @@ export default function SearchPanel({ onSearch, layers = [], activeLayers = [] }
           )}
         </section>
       )}
-
       <p className="text-center text-[10px] text-slate-400">
         Pesquisa externa: © OpenStreetMap contributors (Nominatim). Sugestões locais: camadas GeoJSON do sistema.
       </p>
